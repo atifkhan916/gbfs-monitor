@@ -1,0 +1,32 @@
+{
+  "name": "gbfs-collector",
+  "version": "1.0.0",
+  "description": "GBFS data collector lambda function",
+  "scripts": {
+    "build": "rm -rf build && node esbuild.js",
+    "test": "jest"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.x",
+    "@types/node": "^18.x",
+    "@typescript-eslint/eslint-plugin": "^5.x",
+    "@typescript-eslint/parser": "^5.x",
+    "eslint": "^8.x",
+    "typescript": "^4.x",
+    "jest": "^29.x",
+    "@types/jest": "^29.x",
+    "ts-jest": "^29.x"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.x",
+    "@aws-sdk/client-s3": "^3.x",
+    "@aws-sdk/util-dynamodb": "^3.x",
+    "axios": "^1.x",
+    "constructs": "^10.3.0",
+    "esbuild": "^0.24.0",
+    "source-map-support": "^0.5.21"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
