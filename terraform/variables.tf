@@ -1,6 +1,11 @@
+variable "environment" {
+  description = "Deployment environment (dev/prod)"
+  type        = string
+}
+
 variable "aws_region" {
   description = "AWS region"
-  default     = "us-east-1"
+  type        = string
 }
 
 variable "project_name" {
