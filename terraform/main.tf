@@ -60,7 +60,7 @@ resource "aws_s3_object" "quicksight_manifest" {
 }
 
 # QuickSight resources
-resource "aws_quicksight_account_subscription" "default" {
+resource "aws_quicksight_account_subscription" "quicksight" {
   account_name          = "${var.environment}-${var.project_name}"
   authentication_method = "IAM_AND_QUICKSIGHT"
   edition              = "STANDARD"  # or "ENTERPRISE" based on your needs
@@ -70,7 +70,7 @@ resource "aws_quicksight_account_subscription" "default" {
 
 
 resource "aws_quicksight_data_source" "gbfs_s3" {
-  depends_on = [aws_quicksight_account_subscription.default]
+  depends_on = [aws_quicksight_account_subscription.quicksight]
 
   data_source_id = "${var.environment}-${var.project_name}-s3-source"
   aws_account_id = data.aws_caller_identity.current.account_id
@@ -95,7 +95,7 @@ resource "aws_quicksight_data_source" "gbfs_s3" {
 # Set up incremental refresh 
 resource "aws_quicksight_refresh_schedule" "incremental_refresh" {
   depends_on = [aws_quicksight_data_source.gbfs_s3]
-  
+
   aws_account_id = data.aws_caller_identity.current.account_id
   data_set_id     = aws_quicksight_data_source.gbfs_s3.data_source_id
   schedule_id    = "IncrementalRefresh"
