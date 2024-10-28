@@ -1,11 +1,8 @@
-import { DynamoDBClient, PutItemCommand } from "@aws-sdk/client-dynamodb";
-import { marshall } from "@aws-sdk/util-dynamodb";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
 import axios from 'axios';
 import { BikeStats, GBFSProvider, GBFSResponse, StationInformation, StationStatusResponse } from "./types";
 
-const dynamoClient = new DynamoDBClient({});
 const s3Client = new S3Client({});
 
 async function fetchGBFSData(url: string): Promise<GBFSResponse> {
@@ -92,24 +89,60 @@ async function collectProviderData(provider: GBFSProvider): Promise<BikeStats> {
 }
 
 async function storeData(stats: BikeStats): Promise<void> {
-  const dynamoDbTable = process.env.DYNAMODB_TABLE!;
   const s3Bucket = process.env.S3_BUCKET!;
   
-  // Store in DynamoDB
-  const putItemCommand = new PutItemCommand({
-    TableName: dynamoDbTable,
-    Item: marshall(stats)
-  });
-  await dynamoClient.send(putItemCommand);
-  
-  // Store in S3
-  const putObjectCommand = new PutObjectCommand({
+  // Format date for partitioning
+  const date = new Date(stats.timestamp * 1000);
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(date.getUTCDate()).padStart(2, '0');
+  const hour = String(date.getUTCHours()).padStart(2, '0');
+  const minute = String(date.getUTCMinutes()).padStart(2, '0');
+
+  // Prepare real-time data
+  const realtimeData = {
+    timestamp: stats.timestamp,
+    provider: stats.provider,
+    total_stations: stats.total_stations,
+    total_capacity: stats.total_capacity,
+    total_bikes_available: stats.total_bikes_available,
+    total_docks_available: stats.total_docks_available,
+    active_stations: stats.active_stations,
+    date: `${year}-${month}-${day}`,
+    time: `${hour}:${minute}`,
+    year: parseInt(year+''),
+    month: parseInt(month),
+    day: parseInt(day),
+    hour: parseInt(hour),
+    minute: parseInt(minute)
+  };
+
+  // Store in real-time folder for QuickSight
+  await s3Client.send(new PutObjectCommand({
     Bucket: s3Bucket,
-    Key: `${stats.provider}/${stats.timestamp}.json`,
-    Body: JSON.stringify(stats),
+    Key: `realtime/current/${stats.provider}.json`,
+    Body: JSON.stringify(realtimeData),
     ContentType: 'application/json'
-  });
-  await s3Client.send(putObjectCommand);
+  }));
+
+  // Also store in historical data structure
+  await s3Client.send(new PutObjectCommand({
+    Bucket: s3Bucket,
+    Key: `historical/year=${year}/month=${month}/day=${day}/hour=${hour}/${stats.provider}/${stats.timestamp}.json`,
+    Body: JSON.stringify(realtimeData),
+    ContentType: 'application/json'
+  }));
+
+  // Store current snapshot for API access
+  await s3Client.send(new PutObjectCommand({
+    Bucket: s3Bucket,
+    Key: `realtime/latest/${stats.provider}_snapshot.json`,
+    Body: JSON.stringify({
+      ...realtimeData,
+      last_updated: new Date().toISOString()
+    }),
+    ContentType: 'application/json'
+  }));
 }
 
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
