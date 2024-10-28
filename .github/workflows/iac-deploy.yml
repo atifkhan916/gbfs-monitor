@@ -18,6 +18,7 @@ on:
 env:
   DEV_AWS_REGION: 'us-east-1'  # Replace with your dev AWS region
   PROD_AWS_REGION: 'us-east-1' # Replace with your prod AWS region
+  TF_DIR: './terraform'        # Directory containing Terraform configurations
 
 jobs:
   test-and-deploy:
@@ -47,7 +48,13 @@ jobs:
     #- name: Run tests
     #  run: npm test
 
-    # Step 6: Determine the deployment environment
+    # Step 6: Setup Terraform
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v2
+      with:
+        terraform_version: '1.5.7' 
+
+    # Step 7: Determine the deployment environment
     # Sets DEPLOY_ENV based on the trigger and branch
     - name: Set environment
       run: |
@@ -70,7 +77,7 @@ jobs:
           exit 1
         fi
 
-    # Step 7: Configure AWS credentials
+    # Step 8: Configure AWS credentials
     # Uses environment-specific credentials stored in GitHub secrets
     - name: Configure AWS credentials
       if: env.DEPLOY_ENV == 'DEV' || env.DEPLOY_ENV == 'PROD'
@@ -80,10 +87,12 @@ jobs:
         aws-secret-access-key: ${{ secrets[format('GBFS_{0}_AWS_SECRET_KEY', env.DEPLOY_ENV)] }}
         aws-region: ${{ env.AWS_REGION }}
 
-    # Step 8: Deploy the IAC stack
+    # Step 9: Deploy the IAC stack
     # Only runs if all previous steps were successful and DEPLOY_ENV is set
     # Includes a manual confirmation step for production deployments
     - name: Deploy
+      env:
+        TF_VAR_environment: ${{ env.DEPLOY_ENV }}
       if: success() && (env.DEPLOY_ENV == 'DEV' || env.DEPLOY_ENV == 'PROD')
       run: |
         if [[ "${{ env.DEPLOY_ENV }}" == "PROD" ]]; then
@@ -94,7 +103,30 @@ jobs:
             exit 1
           fi
         fi
-        npx cdk deploy --context environment=${{ env.DEPLOY_ENV }}  --context aws_region=${{ env.AWS_REGION }} --require-approval never
+        echo "Running Terraform commands..."
+        cd "$TF_DIR" || exit
+
+        echo "Initializing Terraform..."
+        terraform init \
+          -backend-config="bucket=${{ env.DEPLOY_ENV }}-gbfs-monitoring-terraform-state" \
+          -backend-config="key=terraform.tfstate" \
+          -backend-config="region=${{ env.AWS_REGION }}"
+
+        echo "Selecting or creating workspace"
+        terraform workspace select ${{ env.TF_WORKSPACE }} || terraform workspace new ${{ env.TF_WORKSPACE }}
+
+        echo "Validating Terraform configuration..."
+        terraform validate
+
+        echo "Generating Terraform plan..."
+        terraform plan -var-file="environments/${{ env.DEPLOY_ENV }}.tfvars" -out=tfplan
+
+        echo "Creating resources..."
+        echo "Deploying to ${{ env.DEPLOY_ENV }} environment..."
+        terraform apply -auto-approve tfplan
+      
+
+        echo "Script completed!"
       shell: bash
   
     
