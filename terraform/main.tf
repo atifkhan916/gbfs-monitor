@@ -96,9 +96,9 @@ resource "aws_quicksight_refresh_schedule" "incremental_refresh" {
 
   schedule {
     refresh_type = "INCREMENTAL_REFRESH"
-    start_after_date_time = "00:00"
+    start_after_date_time = "2024-10-28T00:00:00"
     schedule_frequency {
-      interval = "PT15M"  
+      interval = "MINUTE15"  
     }
   }
 }
