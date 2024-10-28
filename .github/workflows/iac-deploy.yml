@@ -95,17 +95,24 @@ jobs:
         echo "Running Terraform commands..."
         cd "$TF_DIR" || exit
 
-        BUCKET_NAME=$(echo "${{ env.DEPLOY_ENV }}" | tr '[:upper:]' '[:lower:]')-gbfs-monitoring-terraform-state
-        VAR_FILE=$(echo "environments/${{ env.DEPLOY_ENV }}" | tr '[:upper:]' '[:lower:]').tfvars
-        
+        ENV_LOWER=$(echo "${{ env.DEPLOY_ENV }}" | tr '[:upper:]' '[:lower:]')
+        BUCKET_NAME="${ENV_LOWER}-gbfs-monitoring-terraform-state"
+        VAR_FILE="environments/${ENV_LOWER}.tfvars"
+        WORKSPACE_NAME="${ENV_LOWER}"
+
+        echo "Using configuration:"
+        echo "Workspace: ${WORKSPACE_NAME}"
+        echo "Bucket: ${BUCKET_NAME}"
+        echo "Var file: ${VAR_FILE}"
+
         echo "Initializing Terraform..."
         terraform init \
           -backend-config="bucket=${BUCKET_NAME}" \
           -backend-config="key=terraform.tfstate" \
           -backend-config="region=${{ env.AWS_REGION }}"
 
-        echo "Selecting or creating workspace"
-        terraform workspace select ${{ env.TF_WORKSPACE }} || terraform workspace new ${{ env.TF_WORKSPACE }}
+       echo "Selecting or creating workspace: ${WORKSPACE_NAME}"
+        terraform workspace select ${WORKSPACE_NAME} || terraform workspace new ${WORKSPACE_NAME}
 
         echo "Validating Terraform configuration..."
         terraform validate
