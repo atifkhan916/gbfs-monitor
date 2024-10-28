@@ -72,7 +72,7 @@ resource "aws_quicksight_data_source" "dynamodb_source" {
   type           = "AMAZON_DYNAMODB"
   
   parameters {
-    dynamic_db {
+    dynamodb {       
       table_name = aws_dynamodb_table.gbfs_current_state.name
     }
   }
