@@ -97,7 +97,7 @@ jobs:
 
         echo "Initializing Terraform..."
         terraform init \
-          -backend-config="bucket=${{ENV}}-gbfs-monitoring-terraform-state" \
+          -backend-config="bucket=${ENV}-gbfs-monitoring-terraform-state" \
           -backend-config="key=terraform.tfstate" \
           -backend-config="region=${{ env.AWS_REGION }}"
 
