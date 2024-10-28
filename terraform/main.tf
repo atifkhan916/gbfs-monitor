@@ -90,11 +90,15 @@ resource "aws_quicksight_data_source" "gbfs_s3" {
 
 # Set up incremental refresh every 5 minutes
 resource "aws_quicksight_refresh_schedule" "incremental_refresh" {
-  aws_account_id   = data.aws_caller_identity.current.account_id
-  dataset_id       = aws_quicksight_data_source.gbfs_s3.data_source_id
-  schedule_id      = "IncrementalRefresh"
-  refresh_type     = "INCREMENTAL_REFRESH"
-  schedule         = "*/5 * * * ? *"  # Every 5 minutes
+  aws_account_id = data.aws_caller_identity.current.account_id
+  data_set_id     = aws_quicksight_data_source.gbfs_s3.data_source_id
+  schedule_id    = "IncrementalRefresh"
+
+  schedule {
+    refresh_type = "INCREMENTAL_REFRESH"
+    start_after_time = "00:00"
+    recurrence = "PT5M"  # ISO 8601 duration format for 5 minutes
+  }
 }
 
 # Create a separate folder for real-time data
@@ -296,86 +300,81 @@ resource "aws_api_gateway_method" "realtime_get" {
   resource_id   = aws_api_gateway_resource.realtime.id
   http_method   = "GET"
   authorization = "NONE"  # Consider adding authorization in production
-
-  cors_configuration {
-    allow_origins = ["*"]
-    allow_methods = ["GET"]
-    allow_headers = ["Content-Type", "X-Amz-Date", "Authorization", "X-Api-Key", "X-Amz-Security-Token"]
-    max_age      = 300
-  }
 }
 
-# API Gateway Integration with Lambda
-resource "aws_api_gateway_integration" "realtime_lambda" {
+# OPTIONS method for CORS
+resource "aws_api_gateway_method" "realtime_options" {
+  rest_api_id   = aws_api_gateway_rest_api.realtime.id
+  resource_id   = aws_api_gateway_resource.realtime.id
+  http_method   = "OPTIONS"
+  authorization = "NONE"
+}
+
+# CORS Integration for OPTIONS
+resource "aws_api_gateway_integration" "realtime_options" {
   rest_api_id = aws_api_gateway_rest_api.realtime.id
   resource_id = aws_api_gateway_resource.realtime.id
-  http_method = aws_api_gateway_method.realtime_get.http_method
+  http_method = aws_api_gateway_method.realtime_options.http_method
+  type        = "MOCK"
 
-  integration_http_method = "POST"
-  type                   = "AWS_PROXY"
-  uri                    = aws_lambda_function.realtime_api.invoke_arn
-}
-
-# Lambda permission for API Gateway
-resource "aws_lambda_permission" "realtime_apigw" {
-  statement_id  = "AllowAPIGatewayInvoke"
-  action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.realtime_api.function_name
-  principal     = "apigateway.amazonaws.com"
-
-  source_arn = "${aws_api_gateway_rest_api.realtime.execution_arn}/*/*"
-}
-
-# API Gateway Deployment
-resource "aws_api_gateway_deployment" "realtime" {
-  rest_api_id = aws_api_gateway_rest_api.realtime.id
-
-  depends_on = [
-    aws_api_gateway_integration.realtime_lambda
-  ]
-
-  lifecycle {
-    create_before_destroy = true
+  request_templates = {
+    "application/json" = "{\"statusCode\": 200}"
   }
 }
 
-# API Gateway Stage
-resource "aws_api_gateway_stage" "realtime" {
-  deployment_id = aws_api_gateway_deployment.realtime.id
-  rest_api_id   = aws_api_gateway_rest_api.realtime.id
-  stage_name    = var.environment
+# CORS Method Response for OPTIONS
+resource "aws_api_gateway_method_response" "realtime_options" {
+  rest_api_id = aws_api_gateway_rest_api.realtime.id
+  resource_id = aws_api_gateway_resource.realtime.id
+  http_method = aws_api_gateway_method.realtime_options.http_method
+  status_code = "200"
+
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Headers" = true,
+    "method.response.header.Access-Control-Allow-Methods" = true,
+    "method.response.header.Access-Control-Allow-Origin"  = true
+  }
 }
 
-# Add CORS configuration
-resource "aws_api_gateway_method_response" "cors" {
+# CORS Integration Response for OPTIONS
+resource "aws_api_gateway_integration_response" "realtime_options" {
+  rest_api_id = aws_api_gateway_rest_api.realtime.id
+  resource_id = aws_api_gateway_resource.realtime.id
+  http_method = aws_api_gateway_method.realtime_options.http_method
+  status_code = aws_api_gateway_method_response.realtime_options.status_code
+
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Headers" = "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'",
+    "method.response.header.Access-Control-Allow-Methods" = "'GET,OPTIONS'",
+    "method.response.header.Access-Control-Allow-Origin"  = "'*'"
+  }
+}
+
+# Method Response for GET
+resource "aws_api_gateway_method_response" "realtime_get" {
   rest_api_id = aws_api_gateway_rest_api.realtime.id
   resource_id = aws_api_gateway_resource.realtime.id
   http_method = aws_api_gateway_method.realtime_get.http_method
   status_code = "200"
 
   response_parameters = {
-    "method.response.header.Access-Control-Allow-Origin"      = true
-    "method.response.header.Access-Control-Allow-Headers"     = true
-    "method.response.header.Access-Control-Allow-Methods"     = true
-    "method.response.header.Access-Control-Allow-Credentials" = true
+    "method.response.header.Access-Control-Allow-Origin" = true
   }
 }
 
-resource "aws_api_gateway_integration_response" "cors" {
+# Integration Response for GET
+resource "aws_api_gateway_integration_response" "realtime_get" {
   rest_api_id = aws_api_gateway_rest_api.realtime.id
   resource_id = aws_api_gateway_resource.realtime.id
   http_method = aws_api_gateway_method.realtime_get.http_method
-  status_code = aws_api_gateway_method_response.cors.status_code
+  status_code = aws_api_gateway_method_response.realtime_get.status_code
 
   response_parameters = {
-    "method.response.header.Access-Control-Allow-Origin"      = "'*'"
-    "method.response.header.Access-Control-Allow-Headers"     = "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
-    "method.response.header.Access-Control-Allow-Methods"     = "'GET,OPTIONS'"
-    "method.response.header.Access-Control-Allow-Credentials" = "'true'"
+    "method.response.header.Access-Control-Allow-Origin" = "'*'"
   }
 
   depends_on = [
-    aws_api_gateway_method_response.cors
+    aws_api_gateway_integration.realtime_lambda
   ]
 }
 
