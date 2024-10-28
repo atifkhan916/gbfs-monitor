@@ -71,12 +71,8 @@ resource "aws_quicksight_data_source" "dynamodb_source" {
   name           = "${var.environment}-GBFS Current State"
   type           = "AMAZON_DYNAMODB"
   
-  parameters {
-    dynamodb {       
-      table_name = aws_dynamodb_table.gbfs_current_state.name
-    }
-  }
-
+  physical_table_id = aws_dynamodb_table.gbfs_current_state.name
+  
   permission {
     actions   = ["quicksight:UpdateDataSourcePermissions", "quicksight:DescribeDataSource", "quicksight:DescribeDataSourcePermissions", "quicksight:PassDataSource", "quicksight:UpdateDataSource", "quicksight:DeleteDataSource"]
     principal = aws_iam_role.quicksight_role.arn
