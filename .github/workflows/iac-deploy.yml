@@ -95,9 +95,12 @@ jobs:
         echo "Running Terraform commands..."
         cd "$TF_DIR" || exit
 
+        BUCKET_NAME=$(echo "${{ env.DEPLOY_ENV }}" | tr '[:upper:]' '[:lower:]')-gbfs-monitoring-terraform-state
+        VAR_FILE=$(echo "environments/${{ env.DEPLOY_ENV }}" | tr '[:upper:]' '[:lower:]').tfvars
+        
         echo "Initializing Terraform..."
         terraform init \
-          -backend-config="bucket=${ENV}-gbfs-monitoring-terraform-state" \
+          -backend-config="bucket=${BUCKET_NAME}" \
           -backend-config="key=terraform.tfstate" \
           -backend-config="region=${{ env.AWS_REGION }}"
 
@@ -108,7 +111,7 @@ jobs:
         terraform validate
 
         echo "Generating Terraform plan..."
-        terraform plan -var-file="environments/${{ env.DEPLOY_ENV }}.tfvars" -out=tfplan
+        terraform plan -var-file="${VAR_FILE}" -out=tfplan
 
         echo "Creating resources..."
         echo "Deploying to ${{ env.DEPLOY_ENV }} environment..."
