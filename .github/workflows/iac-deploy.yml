@@ -111,7 +111,7 @@ jobs:
           -backend-config="key=terraform.tfstate" \
           -backend-config="region=${{ env.AWS_REGION }}"
 
-       echo "Selecting or creating workspace: ${WORKSPACE_NAME}"
+        echo "Selecting or creating workspace: ${WORKSPACE_NAME}"
         terraform workspace select ${WORKSPACE_NAME} || terraform workspace new ${WORKSPACE_NAME}
 
         echo "Validating Terraform configuration..."
