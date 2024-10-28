@@ -2,7 +2,7 @@
 
 # Function to check if bucket exists and create if it doesn't
 setup_terraform_backend() {
-    local bucket_name="$1"
+    local bucket_name=$(echo "$1" | tr '[:upper:]' '[:lower:]')
     local region="$2"
 
     echo "Checking if bucket $bucket_name exists..."
@@ -12,12 +12,19 @@ setup_terraform_backend() {
     else
         echo "Bucket $bucket_name does not exist. Creating..."
         
-        # Create the bucket
-        if aws s3api create-bucket \
-            --bucket "$bucket_name" \
-            --region "$region" \
-            --create-bucket-configuration LocationConstraint="$region"; then
-            
+        # Create the bucket based on region
+        if [ "$region" = "us-east-1" ]; then
+            aws s3api create-bucket \
+                --bucket "$bucket_name" \
+                --region "$region"
+        else
+            aws s3api create-bucket \
+                --bucket "$bucket_name" \
+                --region "$region" \
+                --create-bucket-configuration LocationConstraint="$region"
+        fi
+
+        if [ $? -eq 0 ]; then
             echo "Bucket created successfully"
             
             # Enable versioning
@@ -59,3 +66,6 @@ setup_terraform_backend() {
         fi
     fi
 }
+
+# Call the function with command line arguments
+setup_terraform_backend "$1" "$2"
