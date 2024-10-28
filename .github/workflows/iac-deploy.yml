@@ -87,6 +87,17 @@ jobs:
         aws-secret-access-key: ${{ secrets[format('GBFS_{0}_AWS_SECRET_KEY', env.DEPLOY_ENV)] }}
         aws-region: ${{ env.AWS_REGION }}
 
+    # Step 9 : Check and create S3 bucket for TF if needed
+    - name: Setup Terraform Backend
+      if: env.DEPLOY_ENV == 'DEV' || env.DEPLOY_ENV == 'PROD'
+      run: |
+        chmod +x ./scripts/setup_terraform_backend.sh
+        ./scripts/setup_terraform_backend.sh \
+          "${{ env.DEPLOY_ENV }}-gbfs-monitoring-terraform-state" \
+          "${{ env.AWS_REGION }}"
+      shell: bash
+
+
     # Step 9: Deploy the IAC stack
     # Only runs if all previous steps were successful and DEPLOY_ENV is set
     # Includes a manual confirmation step for production deployments
