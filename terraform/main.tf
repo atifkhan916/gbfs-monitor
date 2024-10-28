@@ -60,14 +60,18 @@ resource "aws_s3_object" "quicksight_manifest" {
 }
 
 # QuickSight resources
-resource "aws_quicksight_account_subscription" "quicksight" {
-  account_name          = "${var.environment}-${var.project_name}-account"
+resource "aws_quicksight_account_subscription" "default" {
+  account_name          = "${var.environment}-${var.project_name}"
   authentication_method = "IAM_AND_QUICKSIGHT"
-  edition              = "ENTERPRISE"
+  edition              = "STANDARD"  # or "ENTERPRISE" based on your needs
   notification_email   = var.notification_email
+  aws_account_id      = data.aws_caller_identity.current.account_id
 }
 
+
 resource "aws_quicksight_data_source" "gbfs_s3" {
+  depends_on = [aws_quicksight_account_subscription.default]
+
   data_source_id = "${var.environment}-${var.project_name}-s3-source"
   aws_account_id = data.aws_caller_identity.current.account_id
   name           = "GBFS Historical Data"
@@ -90,6 +94,8 @@ resource "aws_quicksight_data_source" "gbfs_s3" {
 
 # Set up incremental refresh 
 resource "aws_quicksight_refresh_schedule" "incremental_refresh" {
+  depends_on = [aws_quicksight_data_source.gbfs_s3]
+  
   aws_account_id = data.aws_caller_identity.current.account_id
   data_set_id     = aws_quicksight_data_source.gbfs_s3.data_source_id
   schedule_id    = "IncrementalRefresh"
@@ -297,21 +303,3 @@ resource "aws_api_gateway_rest_api" "gbfs_api" {
   }
 }
 
-# Lambda function for dashboard API
-resource "aws_lambda_function" "dashboard_api" {
-  filename         = "lambda_api.zip"
-  function_name    = "${var.environment}-${var.project_name}-api"
-  role            = aws_iam_role.lambda_role.arn
-  handler         = "index.handler"
-  runtime         = "nodejs18.x"
-
-  environment {
-    variables = {
-      S3_BUCKET = aws_s3_bucket.gbfs_historical_data.id
-    }
-  }
-
-  tags = {
-    Environment = var.environment
-  }
-}
