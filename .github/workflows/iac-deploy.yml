@@ -1,84 +1,66 @@
-# This workflow handles the testing and deployment process for a CDK application
-# It supports both development and production environments
 name: GBFS Deployment
 
-# Define the events that trigger this workflow
 on:
   pull_request:
     types: [closed]
-    branches: [dev]  # Trigger on closed PRs to dev branch
-  workflow_dispatch:  # Allow manual triggers
+    branches: [dev]
+  workflow_dispatch:
     inputs:
       environment:
         description: 'Environment to deploy to (dev/prod)'
         required: true
         default: 'dev'
 
-# Define environment variables
 env:
-  DEV_AWS_REGION: 'us-east-1'  # Replace with your dev AWS region
-  PROD_AWS_REGION: 'us-east-1' # Replace with your prod AWS region
-  TF_DIR: './terraform'        # Directory containing Terraform configurations
+  TF_DIR: './terraform'
 
 jobs:
   test-and-deploy:
     runs-on: ubuntu-latest
     
     steps:
-    # Step 1: Check out the repository code
     - name: Checkout code
       uses: actions/checkout@v2
 
-    # Step 2: Set up Node.js environment
     - name: Setup Node.js
       uses: actions/setup-node@v2
       with:
         node-version: '20.x'
 
-    # Step 3: Install project dependencies
     - name: Install dependencies
       run: npm ci
 
-    # Step 4: Build TypeScript code
     - name: Build TypeScript
       run: npm run build
 
-    # Step 5: Run test suite
-    # This step will fail the workflow if any tests fail
-    #- name: Run tests
-    #  run: npm test
-
-    # Step 6: Setup Terraform
     - name: Setup Terraform
       uses: hashicorp/setup-terraform@v2
       with:
-        terraform_version: '1.5.7' 
+        terraform_version: '1.5.7'
 
-    # Step 7: Determine the deployment environment
-    # Sets DEPLOY_ENV based on the trigger and branch
-    - name: Set environment
+    # New step to read tfvars
+    - name: Read Environment Variables
+      id: tfvars
       run: |
         if [[ "${{ github.event_name }}" == "pull_request" && "${{ github.event.pull_request.merged }}" == "true" && "${{ github.base_ref }}" == "dev" ]]; then
-          echo "DEPLOY_ENV=DEV" >> $GITHUB_ENV
-          echo "AWS_REGION=${{ env.DEV_AWS_REGION }}" >> $GITHUB_ENV
+          ENV="dev"
         elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-          if [[ "${{ github.event.inputs.environment }}" == "prod" && "${{ github.ref }}" == "refs/heads/main" ]]; then
-            echo "DEPLOY_ENV=PROD" >> $GITHUB_ENV
-            echo "AWS_REGION=${{ env.PROD_AWS_REGION }}" >> $GITHUB_ENV
-          elif [[ "${{ github.event.inputs.environment }}" == "dev" ]]; then
-            echo "DEPLOY_ENV=DEV" >> $GITHUB_ENV
-            echo "AWS_REGION=${{ env.DEV_AWS_REGION }}" >> $GITHUB_ENV
-          else
-            echo "Invalid environment for the current branch"
-            exit 1
-          fi
+          ENV="${{ github.event.inputs.environment }}"
         else
           echo "No deployment will be performed."
           exit 1
         fi
+        
+        echo "DEPLOY_ENV=${ENV^^}" >> $GITHUB_ENV
+        
+        # Read aws_region from tfvars
+        AWS_REGION=$(grep 'aws_region' "$TF_DIR/environments/${ENV}.tfvars" | cut -d'=' -f2 | tr -d ' "')
+        echo "AWS_REGION=$AWS_REGION" >> $GITHUB_ENV
+        
+        echo "Environment variables set:"
+        echo "DEPLOY_ENV: ${ENV^^}"
+        echo "AWS_REGION: $AWS_REGION"
 
-    # Step 8: Configure AWS credentials
-    # Uses environment-specific credentials stored in GitHub secrets
     - name: Configure AWS credentials
       if: env.DEPLOY_ENV == 'DEV' || env.DEPLOY_ENV == 'PROD'
       uses: aws-actions/configure-aws-credentials@v1
@@ -87,7 +69,6 @@ jobs:
         aws-secret-access-key: ${{ secrets[format('GBFS_{0}_AWS_SECRET_KEY', env.DEPLOY_ENV)] }}
         aws-region: ${{ env.AWS_REGION }}
 
-    # Step 9 : Check and create S3 bucket for TF if needed
     - name: Setup Terraform Backend
       if: env.DEPLOY_ENV == 'DEV' || env.DEPLOY_ENV == 'PROD'
       run: |
@@ -97,10 +78,6 @@ jobs:
           "${{ env.AWS_REGION }}"
       shell: bash
 
-
-    # Step 9: Deploy the IAC stack
-    # Only runs if all previous steps were successful and DEPLOY_ENV is set
-    # Includes a manual confirmation step for production deployments
     - name: Deploy
       env:
         TF_VAR_environment: ${{ env.DEPLOY_ENV }}
@@ -114,6 +91,7 @@ jobs:
             exit 1
           fi
         fi
+        
         echo "Running Terraform commands..."
         cd "$TF_DIR" || exit
 
@@ -135,9 +113,6 @@ jobs:
         echo "Creating resources..."
         echo "Deploying to ${{ env.DEPLOY_ENV }} environment..."
         terraform apply -auto-approve tfplan
-      
 
         echo "Script completed!"
       shell: bash
-  
-    
