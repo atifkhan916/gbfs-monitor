@@ -112,7 +112,7 @@ jobs:
           -backend-config="region=${{ env.AWS_REGION }}"
 
         echo "Selecting or creating workspace: ${WORKSPACE_NAME}"
-        terraform workspace select ${WORKSPACE_NAME} || terraform workspace new ${WORKSPACE_NAME}
+        terraform workspace select -or-create ${WORKSPACE_NAME}
 
         echo "Validating Terraform configuration..."
         terraform validate
