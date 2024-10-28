@@ -38,7 +38,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "bucket_lifecycle" {
 }
 
 # Create manifest file
-resource "aws_s3_bucket_object" "quicksight_manifest" {
+resource "aws_s3_object" "quicksight_manifest" {
   bucket  = aws_s3_bucket.gbfs_historical_data.id
   key     = "manifest.json"
   content = jsonencode({
@@ -88,7 +88,7 @@ resource "aws_quicksight_data_source" "gbfs_s3" {
   }
 }
 
-# Set up incremental refresh every 5 minutes
+# Set up incremental refresh 
 resource "aws_quicksight_refresh_schedule" "incremental_refresh" {
   aws_account_id = data.aws_caller_identity.current.account_id
   data_set_id     = aws_quicksight_data_source.gbfs_s3.data_source_id
@@ -96,15 +96,18 @@ resource "aws_quicksight_refresh_schedule" "incremental_refresh" {
 
   schedule {
     refresh_type = "INCREMENTAL_REFRESH"
-    start_after_time = "00:00"
-    recurrence = "PT5M"  # ISO 8601 duration format for 5 minutes
+    start_after_date_time = "00:00"
+    schedule_frequency {
+      interval = "PT15M"  
+    }
   }
 }
 
 # Create a separate folder for real-time data
-resource "aws_s3_bucket_object" "realtime_manifest" {
+resource "aws_s3_object" "realtime_manifest" {
   bucket  = aws_s3_bucket.gbfs_historical_data.id
   key     = "realtime/manifest.json"
+  
   content = jsonencode({
     fileLocations = [
       {
@@ -248,134 +251,13 @@ resource "aws_lambda_function" "gbfs_collector" {
 resource "aws_cloudwatch_event_rule" "collector_schedule" {
   name                = "${var.environment}-${var.project_name}-collector-schedule"
   description         = "Trigger GBFS data collection every 5 minutes"
-  schedule_expression = "rate(5 minutes)"
+  schedule_expression = "rate(15 minutes)"
 }
 
 resource "aws_cloudwatch_event_target" "collector_target" {
   rule      = aws_cloudwatch_event_rule.collector_schedule.name
   target_id = "CollectorLambda"
   arn       = aws_lambda_function.gbfs_collector.arn
-}
-
-# Lambda function for real-time data API
-resource "aws_lambda_function" "realtime_api" {
-  filename      = "../build/realtime.zip"
-  function_name    = "${var.environment}-${var.project_name}-realtime-api"
-  role            = aws_iam_role.lambda_role.arn
-  handler         = "index.handler"
-  runtime         = "nodejs18.x"
-  timeout         = 30
-
-  environment {
-    variables = {
-      S3_BUCKET = aws_s3_bucket.gbfs_historical_data.id
-      PROVIDERS = jsonencode(var.gbfs_providers)
-    }
-  }
-
-  tags = {
-    Environment = var.environment
-  }
-}
-
-# API Gateway REST API
-resource "aws_api_gateway_rest_api" "realtime" {
-  name = "${var.environment}-${var.project_name}-realtime-api"
-  
-  tags = {
-    Environment = var.environment
-  }
-}
-
-# API Gateway Resource
-resource "aws_api_gateway_resource" "realtime" {
-  rest_api_id = aws_api_gateway_rest_api.realtime.id
-  parent_id   = aws_api_gateway_rest_api.realtime.root_resource_id
-  path_part   = "realtime"
-}
-
-# API Gateway Method
-resource "aws_api_gateway_method" "realtime_get" {
-  rest_api_id   = aws_api_gateway_rest_api.realtime.id
-  resource_id   = aws_api_gateway_resource.realtime.id
-  http_method   = "GET"
-  authorization = "NONE"  # Consider adding authorization in production
-}
-
-# OPTIONS method for CORS
-resource "aws_api_gateway_method" "realtime_options" {
-  rest_api_id   = aws_api_gateway_rest_api.realtime.id
-  resource_id   = aws_api_gateway_resource.realtime.id
-  http_method   = "OPTIONS"
-  authorization = "NONE"
-}
-
-# CORS Integration for OPTIONS
-resource "aws_api_gateway_integration" "realtime_options" {
-  rest_api_id = aws_api_gateway_rest_api.realtime.id
-  resource_id = aws_api_gateway_resource.realtime.id
-  http_method = aws_api_gateway_method.realtime_options.http_method
-  type        = "MOCK"
-
-  request_templates = {
-    "application/json" = "{\"statusCode\": 200}"
-  }
-}
-
-# CORS Method Response for OPTIONS
-resource "aws_api_gateway_method_response" "realtime_options" {
-  rest_api_id = aws_api_gateway_rest_api.realtime.id
-  resource_id = aws_api_gateway_resource.realtime.id
-  http_method = aws_api_gateway_method.realtime_options.http_method
-  status_code = "200"
-
-  response_parameters = {
-    "method.response.header.Access-Control-Allow-Headers" = true,
-    "method.response.header.Access-Control-Allow-Methods" = true,
-    "method.response.header.Access-Control-Allow-Origin"  = true
-  }
-}
-
-# CORS Integration Response for OPTIONS
-resource "aws_api_gateway_integration_response" "realtime_options" {
-  rest_api_id = aws_api_gateway_rest_api.realtime.id
-  resource_id = aws_api_gateway_resource.realtime.id
-  http_method = aws_api_gateway_method.realtime_options.http_method
-  status_code = aws_api_gateway_method_response.realtime_options.status_code
-
-  response_parameters = {
-    "method.response.header.Access-Control-Allow-Headers" = "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'",
-    "method.response.header.Access-Control-Allow-Methods" = "'GET,OPTIONS'",
-    "method.response.header.Access-Control-Allow-Origin"  = "'*'"
-  }
-}
-
-# Method Response for GET
-resource "aws_api_gateway_method_response" "realtime_get" {
-  rest_api_id = aws_api_gateway_rest_api.realtime.id
-  resource_id = aws_api_gateway_resource.realtime.id
-  http_method = aws_api_gateway_method.realtime_get.http_method
-  status_code = "200"
-
-  response_parameters = {
-    "method.response.header.Access-Control-Allow-Origin" = true
-  }
-}
-
-# Integration Response for GET
-resource "aws_api_gateway_integration_response" "realtime_get" {
-  rest_api_id = aws_api_gateway_rest_api.realtime.id
-  resource_id = aws_api_gateway_resource.realtime.id
-  http_method = aws_api_gateway_method.realtime_get.http_method
-  status_code = aws_api_gateway_method_response.realtime_get.status_code
-
-  response_parameters = {
-    "method.response.header.Access-Control-Allow-Origin" = "'*'"
-  }
-
-  depends_on = [
-    aws_api_gateway_integration.realtime_lambda
-  ]
 }
 
 # Add required S3 permissions to Lambda role
