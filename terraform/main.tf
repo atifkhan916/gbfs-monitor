@@ -66,6 +66,11 @@ resource "aws_quicksight_account_subscription" "quicksight" {
   edition              = "STANDARD"  # or "ENTERPRISE" based on your needs
   notification_email   = var.notification_email
   aws_account_id      = data.aws_caller_identity.current.account_id
+  
+  # Prevent Terraform from trying to delete the subscription
+  lifecycle {
+    prevent_destroy = false
+  }
 }
 
 
