@@ -13,6 +13,7 @@ on:
 
 env:
   TF_DIR: './terraform'
+  OUTPUT_DIR: './build'
 
 jobs:
   test-and-deploy:
@@ -32,6 +33,25 @@ jobs:
 
     - name: Build TypeScript
       run: npm run build
+    
+    - name: Prepare Lambda Functions
+      run: |
+        echo "Creating Lambda deployment packages..."
+        
+        # Create Lambda deployment packages
+        echo "Zipping Lambda functions..."
+        
+        for lambda_folder in "$OUTPUT_DIR"/*; do
+          if [ -d "$lambda_folder" ]; then
+            lambda_name=${lambda_folder%/}
+            echo "Creating deployment package for $lambda_name"
+            (cd "$lambda_folder" && zip -r "../${lambda_name}.zip" . -x "*.test.js" "*.map")
+            echo "Created ${lambda_name}.zip"
+          fi
+        done
+        
+        echo "Lambda deployment packages created successfully"
+      shell: bash
 
     - name: Setup Terraform
       uses: hashicorp/setup-terraform@v2
