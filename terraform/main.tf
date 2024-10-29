@@ -173,7 +173,6 @@ resource "aws_quicksight_user" "users" {
   email = each.value.email
   user_role = each.value.role
   identity_type = "QUICKSIGHT"
-  session_name   = each.key
 
   depends_on = [aws_quicksight_account_subscription.quicksight]
 
