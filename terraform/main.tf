@@ -37,36 +37,6 @@ resource "aws_s3_bucket_lifecycle_configuration" "bucket_lifecycle" {
   }
 }
 
-# Create manifest file
-resource "aws_s3_object" "quicksight_manifest" {
-  bucket  = aws_s3_bucket.gbfs_historical_data.id
-  key     = "manifest.json"
-  content = jsonencode({
-    fileLocations = [
-      {
-        URIPrefixes = [
-          "s3://${aws_s3_bucket.gbfs_historical_data.id}"  # Specify a specific data directory
-        ]
-      }
-    ],
-    globalUploadSettings = {
-      format          = "JSON"
-      delimiter       = ","
-      textqualifier  = "'"
-      containsHeader = "true"
-    }
-  })
-  content_type = "application/json"
-  acl          = "private"  # Explicitly set ACL
-}
-
-# Add a folder for your data
-resource "aws_s3_object" "data_folder" {
-  bucket = aws_s3_bucket.gbfs_historical_data.id
-  key    = "data/"
-  content_type = "application/x-directory"
-}
-
 # Add a bucket policy to explicitly allow QuickSight access
 resource "aws_s3_bucket_policy" "quicksight_access" {
   bucket = aws_s3_bucket.gbfs_historical_data.id
@@ -96,98 +66,38 @@ resource "aws_s3_bucket_policy" "quicksight_access" {
   })
 }
 
-# Create a separate folder for real-time data
-resource "aws_s3_object" "realtime_manifest" {
+# Create a single consolidated manifest file
+resource "aws_s3_object" "quicksight_manifest" {
   bucket  = aws_s3_bucket.gbfs_historical_data.id
-  key     = "realtime/manifest.json"
-  
+  key     = "manifest.json"
   content = jsonencode({
     fileLocations = [
       {
         URIPrefixes = [
-          "s3://${aws_s3_bucket.gbfs_historical_data.id}/realtime/"
+          "s3://${aws_s3_bucket.gbfs_historical_data.id}/data/",    # Historical data directory
+          "s3://${aws_s3_bucket.gbfs_historical_data.id}/realtime/" # Realtime data directory
         ]
       }
     ],
     globalUploadSettings = {
-      format = "JSON",
-      delimiter = ",",
+      format         = "JSON"
+      delimiter      = ","
+      textqualifier = "'"
       containsHeader = "true"
     }
   })
   content_type = "application/json"
+  acl          = "private"
 }
 
-# QuickSight resources
-resource "aws_quicksight_account_subscription" "quicksight" {
-  account_name          = "${var.environment}-${var.project_name}"
-  authentication_method = "IAM_AND_QUICKSIGHT"
-  edition              = "STANDARD"  # or "ENTERPRISE" based on your needs
-  notification_email   = var.notification_email
-  aws_account_id      = data.aws_caller_identity.current.account_id
+resource "aws_s3_object" "data_folders" {
+  for_each = toset(["data/", "realtime/"])
   
+  bucket        = aws_s3_bucket.gbfs_historical_data.id
+  key           = each.key
+  content_type  = "application/x-directory"
 }
 
-
-resource "aws_quicksight_data_source" "gbfs_s3" {
-  depends_on = [
-    aws_quicksight_account_subscription.quicksight,
-    aws_iam_role_policy.quicksight_policy,
-    aws_s3_bucket_policy.quicksight_access,
-    aws_s3_object.quicksight_manifest
-  ]
-
-  data_source_id = "${var.environment}-${var.project_name}-s3-source"
-  aws_account_id = data.aws_caller_identity.current.account_id
-  name           = "GBFS Historical Data"
-  type           = "S3"
-
-  parameters {
-    s3 {
-      manifest_file_location {
-        bucket = aws_s3_bucket.gbfs_historical_data.id
-        key    = "manifest.json"
-      }
-    }
-  }
-  
-  permission {
-    actions   = [
-      "quicksight:UpdateDataSourcePermissions", 
-      "quicksight:DescribeDataSource", 
-      "quicksight:DescribeDataSourcePermissions", 
-      "quicksight:PassDataSource", 
-      "quicksight:UpdateDataSource", 
-      "quicksight:DeleteDataSource"
-      ]
-    principal = aws_iam_role.quicksight_role.arn
-  }
-
-  ssl_properties {
-    disable_ssl = false
-  }
-
-  tags = {
-    Environment = var.environment
-  }
-}
-
-# Set up incremental refresh 
-resource "aws_quicksight_refresh_schedule" "incremental_refresh" {
-  depends_on = [aws_quicksight_data_source.gbfs_s3]
-
-  aws_account_id = data.aws_caller_identity.current.account_id
-  data_set_id     = aws_quicksight_data_source.gbfs_s3.data_source_id
-  schedule_id    = "IncrementalRefresh"
-
-  schedule {
-    refresh_type = "INCREMENTAL_REFRESH"
-    start_after_date_time = "2024-10-28T00:00:00"
-    schedule_frequency {
-      interval = "MINUTE15"  
-    }
-  }
-}
 
 # IAM role for QuickSight
 resource "aws_iam_role" "quicksight_role" {
@@ -241,6 +151,78 @@ resource "aws_iam_role_policy" "quicksight_policy" {
       }
     ]
   })
+}
+
+
+# QuickSight resources
+resource "aws_quicksight_account_subscription" "quicksight" {
+  account_name          = "${var.environment}-${var.project_name}"
+  authentication_method = "IAM_AND_QUICKSIGHT"
+  edition              = "STANDARD"  # or "ENTERPRISE" based on your needs
+  notification_email   = var.notification_email
+  aws_account_id      = data.aws_caller_identity.current.account_id
+  
+}
+
+
+resource "aws_quicksight_data_source" "gbfs_s3" {
+  depends_on = [
+    aws_quicksight_account_subscription.quicksight,
+    aws_iam_role_policy.quicksight_policy,
+    aws_s3_bucket_policy.quicksight_access,
+    aws_s3_object.quicksight_manifest
+  ]
+
+  data_source_id = "${var.environment}-${var.project_name}-s3-source"
+  aws_account_id = data.aws_caller_identity.current.account_id
+  name           = "GBFS Historical Data"
+  type           = "S3"
+
+  parameters {
+    s3 {
+      manifest_file_location {
+        bucket = aws_s3_bucket.gbfs_historical_data.id
+        key    = aws_s3_object.quicksight_manifest.key
+      }
+    }
+  }
+  
+  permission {
+    actions   = [
+      "quicksight:UpdateDataSourcePermissions", 
+      "quicksight:DescribeDataSource", 
+      "quicksight:DescribeDataSourcePermissions", 
+      "quicksight:PassDataSource", 
+      "quicksight:UpdateDataSource", 
+      "quicksight:DeleteDataSource"
+      ]
+    principal = aws_iam_role.quicksight_role.arn
+  }
+
+  ssl_properties {
+    disable_ssl = false
+  }
+
+  tags = {
+    Environment = var.environment
+  }
+}
+
+# Set up incremental refresh 
+resource "aws_quicksight_refresh_schedule" "incremental_refresh" {
+  depends_on = [aws_quicksight_data_source.gbfs_s3]
+
+  aws_account_id = data.aws_caller_identity.current.account_id
+  data_set_id     = aws_quicksight_data_source.gbfs_s3.data_source_id
+  schedule_id    = "IncrementalRefresh"
+
+  schedule {
+    refresh_type = "INCREMENTAL_REFRESH"
+    start_after_date_time = "2024-10-28T00:00:00"
+    schedule_frequency {
+      interval = "MINUTE15"  
+    }
+  }
 }
 
 
