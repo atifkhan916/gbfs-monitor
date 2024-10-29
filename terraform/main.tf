@@ -168,14 +168,15 @@ resource "aws_quicksight_user" "users" {
   for_each = var.quicksight_users
 
   aws_account_id = data.aws_caller_identity.current.account_id
-  namespace      = each.value.namespace
-  user_name     = each.key
-  email         = each.value.email
+  namespace = each.value.namespace
+  user_name = each.key
+  email = each.value.email
+  user_role = each.value.role
   identity_type = "IAM"
-  user_role     = each.value.role
-  session_name  = each.key
-
+  session_name   = each.key
+  
   depends_on = [aws_quicksight_account_subscription.quicksight]
+
 }
 
 
@@ -198,7 +199,6 @@ resource "aws_quicksight_data_source" "gbfs_s3" {
         bucket = aws_s3_bucket.gbfs_historical_data.id
         key    = aws_s3_object.quicksight_manifest.key
       }
-      
     }
   }
   
