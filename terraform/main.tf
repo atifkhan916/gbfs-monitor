@@ -71,7 +71,11 @@ resource "aws_quicksight_account_subscription" "quicksight" {
 
 
 resource "aws_quicksight_data_source" "gbfs_s3" {
-  depends_on = [aws_quicksight_account_subscription.quicksight]
+  depends_on = [
+    aws_quicksight_account_subscription.quicksight,
+    aws_iam_role_policy.quicksight_policy,
+    aws_s3_bucket_policy.quicksight_access
+  ]
 
   data_source_id = "${var.environment}-${var.project_name}-s3-source"
   aws_account_id = data.aws_caller_identity.current.account_id
@@ -111,12 +115,17 @@ resource "aws_s3_bucket_policy" "quicksight_access" {
         Sid    = "AllowQuickSightS3Access"
         Effect = "Allow"
         Principal = {
-          AWS = aws_iam_role.quicksight_role.arn
+          AWS = [
+            aws_iam_role.quicksight_role.arn,
+            "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+          ]
         }
         Action = [
           "s3:GetObject",
+          "s3:GetObjectVersion",
           "s3:ListBucket",
-          "s3:GetBucketLocation"
+          "s3:GetBucketLocation",
+          "s3:ListBucketMultipartUploads"
         ]
         Resource = [
           aws_s3_bucket.gbfs_historical_data.arn,
@@ -195,13 +204,22 @@ resource "aws_iam_role_policy" "quicksight_policy" {
         Effect = "Allow"
         Action = [
           "s3:GetObject",
+          "s3:GetObjectVersion",
           "s3:ListBucket",
-          "s3:GetBucketLocation"
+          "s3:GetBucketLocation",
+          "s3:ListBucketMultipartUploads"
         ]
         Resource = [
           aws_s3_bucket.gbfs_historical_data.arn,
           "${aws_s3_bucket.gbfs_historical_data.arn}/*"
         ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "quicksight:PassDataSource"
+        ]
+        Resource = "*"
       }
     ]
   })
