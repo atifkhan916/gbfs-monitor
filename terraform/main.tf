@@ -74,14 +74,11 @@ resource "aws_s3_bucket_policy" "quicksight_access" {
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
-      {
+      { 
         Sid    = "AllowQuickSightS3Access"
         Effect = "Allow"
         Principal = {
-          AWS = [
-            aws_iam_role.quicksight_role.arn,
-            "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
-          ]
+          Service = "quicksight.amazonaws.com"
         }
         Action = [
           "s3:GetObject",
@@ -94,18 +91,6 @@ resource "aws_s3_bucket_policy" "quicksight_access" {
           aws_s3_bucket.gbfs_historical_data.arn,
           "${aws_s3_bucket.gbfs_historical_data.arn}/*"
         ]
-      },
-      {
-        Sid    = "AllowManifestAccess"
-        Effect = "Allow"
-        Principal = {
-          Service = "quicksight.amazonaws.com"
-        }
-        Action = [
-          "s3:GetObject",
-          "s3:GetObjectVersion"
-        ]
-        Resource = "${aws_s3_bucket.gbfs_historical_data.arn}/${aws_s3_object.quicksight_manifest.key}"
       }
     ]
   })
@@ -178,14 +163,6 @@ resource "aws_quicksight_data_source" "gbfs_s3" {
     principal = aws_iam_role.quicksight_role.arn
   }
 
-  # Add IAM Role as a principal
-  permission {
-    actions = [
-      "quicksight:UpdateDataSourcePermissions"
-    ]
-    principal = aws_iam_role.quicksight_role.arn
-  }
-  
   ssl_properties {
     disable_ssl = false
   }
