@@ -211,7 +211,7 @@ resource "aws_quicksight_data_source" "gbfs_s3" {
       "quicksight:UpdateDataSource", 
       "quicksight:DeleteDataSource"
       ]
-    principal = "arn:aws:quicksight:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:user/default/${var.quicksight_admin_user}"
+    principal = "arn:aws:quicksight:${var.aws_region}:${data.aws_caller_identity.current.account_id}:user/default/${var.quicksight_admin_user}"
   }
 
   ssl_properties {
