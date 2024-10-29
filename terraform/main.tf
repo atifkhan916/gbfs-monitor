@@ -45,7 +45,7 @@ resource "aws_s3_object" "quicksight_manifest" {
     fileLocations = [
       {
         URIPrefixes = [
-          "s3://${aws_s3_bucket.gbfs_historical_data.id}/data/"  # Specify a specific data directory
+          "s3://${aws_s3_bucket.gbfs_historical_data.id}"  # Specify a specific data directory
         ]
       }
     ],
@@ -146,7 +146,7 @@ resource "aws_quicksight_data_source" "gbfs_s3" {
     s3 {
       manifest_file_location {
         bucket = aws_s3_bucket.gbfs_historical_data.id
-        key    = aws_s3_object.quicksight_manifest.key
+        key    = "manifest.json"
       }
     }
   }
