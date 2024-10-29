@@ -174,7 +174,7 @@ resource "aws_quicksight_user" "users" {
   user_role = each.value.role
   identity_type = "IAM"
   session_name   = each.key
-  
+
   depends_on = [aws_quicksight_account_subscription.quicksight]
 
 }
@@ -185,7 +185,8 @@ resource "aws_quicksight_data_source" "gbfs_s3" {
     aws_quicksight_account_subscription.quicksight,
     aws_iam_role_policy.quicksight_policy,
     aws_s3_bucket_policy.quicksight_access,
-    aws_s3_object.quicksight_manifest
+    aws_s3_object.quicksight_manifest,
+    aws_quicksight_user.users
   ]
 
   data_source_id = "${var.environment}-${var.project_name}-s3-source"
