@@ -45,18 +45,19 @@ resource "aws_s3_object" "quicksight_manifest" {
     fileLocations = [
       {
         URIPrefixes = [
-          "s3://${aws_s3_bucket.gbfs_historical_data.id}/"
+          "s3://${aws_s3_bucket.gbfs_historical_data.id}/data/"  # Specify a specific data directory
         ]
       }
     ],
     globalUploadSettings = {
-      format = "JSON",
-      delimiter = ",",
-      textqualifier = "'",
+      format          = "JSON"
+      delimiter       = ","
+      textqualifier  = "'"
       containsHeader = "true"
     }
   })
   content_type = "application/json"
+  acl          = "private"  # Explicitly set ACL
 }
 
 # QuickSight resources
@@ -74,7 +75,8 @@ resource "aws_quicksight_data_source" "gbfs_s3" {
   depends_on = [
     aws_quicksight_account_subscription.quicksight,
     aws_iam_role_policy.quicksight_policy,
-    aws_s3_bucket_policy.quicksight_access
+    aws_s3_bucket_policy.quicksight_access,
+    aws_s3_object.quicksight_manifest
   ]
 
   data_source_id = "${var.environment}-${var.project_name}-s3-source"
@@ -90,7 +92,7 @@ resource "aws_quicksight_data_source" "gbfs_s3" {
       }
     }
   }
-
+  
   permission {
     actions   = [
       "quicksight:UpdateDataSourcePermissions", 
@@ -102,6 +104,20 @@ resource "aws_quicksight_data_source" "gbfs_s3" {
       ]
     principal = aws_iam_role.quicksight_role.arn
   }
+  ssl_properties {
+    disable_ssl = false
+  }
+
+  tags = {
+    Environment = var.environment
+  }
+}
+
+# Add a folder for your data
+resource "aws_s3_object" "data_folder" {
+  bucket = aws_s3_bucket.gbfs_historical_data.id
+  key    = "data/"
+  content_type = "application/x-directory"
 }
 
 # Add a bucket policy to explicitly allow QuickSight access
@@ -131,6 +147,18 @@ resource "aws_s3_bucket_policy" "quicksight_access" {
           aws_s3_bucket.gbfs_historical_data.arn,
           "${aws_s3_bucket.gbfs_historical_data.arn}/*"
         ]
+      },
+      {
+        Sid    = "AllowManifestAccess"
+        Effect = "Allow"
+        Principal = {
+          Service = "quicksight.amazonaws.com"
+        }
+        Action = [
+          "s3:GetObject",
+          "s3:GetObjectVersion"
+        ]
+        Resource = "${aws_s3_bucket.gbfs_historical_data.arn}/${aws_s3_object.quicksight_manifest.key}"
       }
     ]
   })
@@ -207,7 +235,8 @@ resource "aws_iam_role_policy" "quicksight_policy" {
           "s3:GetObjectVersion",
           "s3:ListBucket",
           "s3:GetBucketLocation",
-          "s3:ListBucketMultipartUploads"
+          "s3:ListBucketMultipartUploads",
+          "s3:ListMultipartUploadParts"
         ]
         Resource = [
           aws_s3_bucket.gbfs_historical_data.arn,
@@ -217,9 +246,12 @@ resource "aws_iam_role_policy" "quicksight_policy" {
       {
         Effect = "Allow"
         Action = [
-          "quicksight:PassDataSource"
+          "quicksight:PassDataSource",
+          "quicksight:DescribeDataSource",
+          "quicksight:CreateDataSource",
+          "quicksight:UpdateDataSource"
         ]
-        Resource = "*"
+        Resource = "arn:aws:quicksight:*:${data.aws_caller_identity.current.account_id}:datasource/*"
       }
     ]
   })
