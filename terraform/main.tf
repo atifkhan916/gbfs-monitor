@@ -67,10 +67,6 @@ resource "aws_quicksight_account_subscription" "quicksight" {
   notification_email   = var.notification_email
   aws_account_id      = data.aws_caller_identity.current.account_id
   
-  # Prevent Terraform from trying to delete the subscription
-  lifecycle {
-    prevent_destroy = false
-  }
 }
 
 
@@ -86,15 +82,49 @@ resource "aws_quicksight_data_source" "gbfs_s3" {
     s3 {
       manifest_file_location {
         bucket = aws_s3_bucket.gbfs_historical_data.id
-        key    = "manifest.json"
+        key    = aws_s3_object.quicksight_manifest.key
       }
     }
   }
 
   permission {
-    actions   = ["quicksight:UpdateDataSourcePermissions", "quicksight:DescribeDataSource", "quicksight:DescribeDataSourcePermissions", "quicksight:PassDataSource", "quicksight:UpdateDataSource", "quicksight:DeleteDataSource"]
+    actions   = [
+      "quicksight:UpdateDataSourcePermissions", 
+      "quicksight:DescribeDataSource", 
+      "quicksight:DescribeDataSourcePermissions", 
+      "quicksight:PassDataSource", 
+      "quicksight:UpdateDataSource", 
+      "quicksight:DeleteDataSource"
+      ]
     principal = aws_iam_role.quicksight_role.arn
   }
+}
+
+# Add a bucket policy to explicitly allow QuickSight access
+resource "aws_s3_bucket_policy" "quicksight_access" {
+  bucket = aws_s3_bucket.gbfs_historical_data.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "AllowQuickSightS3Access"
+        Effect = "Allow"
+        Principal = {
+          AWS = aws_iam_role.quicksight_role.arn
+        }
+        Action = [
+          "s3:GetObject",
+          "s3:ListBucket",
+          "s3:GetBucketLocation"
+        ]
+        Resource = [
+          aws_s3_bucket.gbfs_historical_data.arn,
+          "${aws_s3_bucket.gbfs_historical_data.arn}/*"
+        ]
+      }
+    ]
+  })
 }
 
 # Set up incremental refresh 
@@ -165,7 +195,8 @@ resource "aws_iam_role_policy" "quicksight_policy" {
         Effect = "Allow"
         Action = [
           "s3:GetObject",
-          "s3:ListBucket"
+          "s3:ListBucket",
+          "s3:GetBucketLocation"
         ]
         Resource = [
           aws_s3_bucket.gbfs_historical_data.arn,
