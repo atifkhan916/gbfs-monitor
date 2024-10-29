@@ -28,8 +28,9 @@ variable "quicksight_users" {
 }
 
 variable "quicksight_admin_user" {
-  description = "Primary QuickSight admin username for data source permissions"
+  description = "Primary QuickSight admin username"
   type        = string
+  default     = "adminuser"
 }
 
 variable "gbfs_providers" {
