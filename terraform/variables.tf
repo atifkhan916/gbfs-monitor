@@ -45,8 +45,8 @@ variable "gbfs_providers" {
       url = "https://dubai.publicbikesystem.net/customer/gbfs/v2/gbfs.json"
     },
     {
-      name = "mibicitubici"
-      url = "https://www.mibicitubici.gob.ar/opendata/gbfs.json"
+      name = "Ecobici"
+      url = "https://buenosaires.publicbikesystem.net/ube/gbfs/v1/"
     },
     {
       name = "nextbike"

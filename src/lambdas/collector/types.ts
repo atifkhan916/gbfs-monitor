@@ -12,7 +12,11 @@ export interface GBFSProvider {
     last_updated: number;
     ttl: number;
     data: {
-      en: {
+      en?: {
+        feeds: GBFSFeed[];
+      };
+      feeds?: GBFSFeed[];
+      de?: {
         feeds: GBFSFeed[];
       };
     };
