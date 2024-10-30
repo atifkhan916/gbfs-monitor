@@ -223,12 +223,77 @@ resource "aws_quicksight_data_source" "gbfs_s3" {
   }
 }
 
+# Define the QuickSight dataset
+resource "aws_quicksight_data_set" "gbfs_dataset" {
+  depends_on = [ aws_quicksight_data_source.gbfs_s3 ]
+
+  aws_account_id = data.aws_caller_identity.current.account_id
+  data_set_id    = "${var.environment}-${var.project_name}-gbfs-dataset"
+  name           = "${var.environment} GBFS DataSet"
+
+  import_mode = "SPICE"
+
+  physical_table_map {
+    physical_table_map_id = "${var.environment}-${var.project_name}-gbfs-table-map-id"
+    s3_source {
+      data_source_arn =  aws_quicksight_data_source.gbfs_s3.arn
+      input_columns {
+        name = "provider"
+        type = "STRING"
+      }
+      input_columns {
+        name = "total_stations"
+        type = "INTEGER"
+      }
+      input_columns {
+        name = "total_capacity"
+        type = "INTEGER"
+      }
+      input_columns {
+        name = "total_bikes_available"
+        type = "INTEGER"
+      }
+
+      input_columns {
+        name = "total_docks_available"
+        type = "INTEGER"
+      }
+
+      input_columns {
+        name = "active_stations"
+        type = "INTEGER"
+      }
+
+      input_columns {
+        name = "datetime"
+        type = "DATETIME"  # This assumes isoDateTime is in a format QuickSight can recognize as a datetime
+      }
+
+      upload_settings {
+        format = "JSON"
+      }
+    }
+  }
+
+  # Define permissions for the dataset
+  permissions {
+    actions = [
+      "quicksight:DescribeDataSet",
+      "quicksight:DescribeDataSetPermissions",
+      "quicksight:PassDataSet",
+      "quicksight:UpdateDataSet",
+      "quicksight:DeleteDataSet"
+    ]
+    principal = "arn:aws:quicksight:${var.aws_region}:${data.aws_caller_identity.current.account_id}:user/default/${var.quicksight_admin_user}"
+  }
+}
+
 # Set up incremental refresh 
 resource "aws_quicksight_refresh_schedule" "incremental_refresh" {
   depends_on = [aws_quicksight_data_source.gbfs_s3]
 
   aws_account_id = data.aws_caller_identity.current.account_id
-  data_set_id     = aws_quicksight_data_source.gbfs_s3.data_source_id
+  data_set_id     = aws_quicksight_data_set.gbfs_dataset.data_set_id
   schedule_id    = "IncrementalRefresh"
 
   schedule {

@@ -84,7 +84,7 @@ export interface GBFSProvider {
     total_bikes_available: number;
     total_docks_available: number;
     active_stations: number;
-    stations_data: {
+    stations_data?: {
       [key: string]: {
         name: string;
         capacity: number;
