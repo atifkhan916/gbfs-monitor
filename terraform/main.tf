@@ -293,6 +293,10 @@ resource "aws_quicksight_data_set" "gbfs_dataset" {
   }
 }
 
+locals {
+  start_time = timeadd(timestamp(), "5m")
+}
+
 # Set up incremental refresh 
 resource "aws_quicksight_refresh_schedule" "incremental_refresh" {
   depends_on = [aws_quicksight_data_source.gbfs_s3, aws_quicksight_data_set.gbfs_dataset]
@@ -303,7 +307,7 @@ resource "aws_quicksight_refresh_schedule" "incremental_refresh" {
 
   schedule {
     refresh_type = "INCREMENTAL_REFRESH"
-    start_after_date_time = "2024-10-28T00:00:00"
+    start_after_date_time = formatdate("YYYY-MM-DD'T'hh:mm:ss", local.start_time)
     schedule_frequency {
       interval = "MINUTE15"  
     }
