@@ -83,8 +83,7 @@ async function collectProviderData(provider: GBFSProvider): Promise<BikeStats> {
     total_capacity,
     total_bikes_available,
     total_docks_available,
-    active_stations,
-    stations_data
+    active_stations
   };
 }
 
@@ -93,28 +92,23 @@ async function storeData(stats: BikeStats): Promise<void> {
   
   // Format date for partitioning
   const date = new Date(stats.timestamp * 1000);
+  const isoDateTime = date.toISOString(); 
+
+  // Extract components for partitioning
   const year = date.getUTCFullYear();
   const month = String(date.getUTCMonth() + 1).padStart(2, '0');
   const day = String(date.getUTCDate()).padStart(2, '0');
   const hour = String(date.getUTCHours()).padStart(2, '0');
-  const minute = String(date.getUTCMinutes()).padStart(2, '0');
 
   // Prepare real-time data
   const realtimeData = {
-    timestamp: stats.timestamp,
     provider: stats.provider,
     total_stations: stats.total_stations,
     total_capacity: stats.total_capacity,
     total_bikes_available: stats.total_bikes_available,
     total_docks_available: stats.total_docks_available,
     active_stations: stats.active_stations,
-    date: `${year}-${month}-${day}`,
-    time: `${hour}:${minute}`,
-    year: parseInt(year+''),
-    month: parseInt(month),
-    day: parseInt(day),
-    hour: parseInt(hour),
-    minute: parseInt(minute)
+    datetime: isoDateTime,
   };
 
   // Store in real-time folder for QuickSight
