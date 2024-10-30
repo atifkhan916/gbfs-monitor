@@ -188,7 +188,7 @@ resource "aws_quicksight_data_source" "gbfs_s3" {
     aws_quicksight_user.users
   ]
 
-  data_source_id = "${var.environment}-${var.project_name}-s3-source"
+  data_source_id = "${var.project_name}-s3-source"
   aws_account_id = data.aws_caller_identity.current.account_id
   name           = "GBFS Historical Data"
   type           = "S3"
@@ -201,7 +201,7 @@ resource "aws_quicksight_data_source" "gbfs_s3" {
       }
     }
   }
-  
+
   permission {
     actions   = [
       "quicksight:UpdateDataSourcePermissions", 
@@ -389,17 +389,46 @@ resource "aws_lambda_function" "gbfs_collector" {
   }
 }
 
+
 # CloudWatch Event Rule to trigger Lambda
 resource "aws_cloudwatch_event_rule" "collector_schedule" {
   name                = "${var.environment}-${var.project_name}-collector-schedule"
   description         = "Trigger GBFS data collection every 5 minutes"
   schedule_expression = "rate(15 minutes)"
+  tags = {
+    Environment = var.environment
+  }
 }
 
 resource "aws_cloudwatch_event_target" "collector_target" {
   rule      = aws_cloudwatch_event_rule.collector_schedule.name
   target_id = "CollectorLambda"
   arn       = aws_lambda_function.gbfs_collector.arn
+}
+
+# Permission for EventBridge to invoke Lambda
+resource "aws_lambda_permission" "allow_eventbridge" {
+  statement_id  = "AllowEventBridgeInvoke"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.gbfs_collector.function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.collector_schedule.arn
+}
+
+# Add CloudWatch Logs for debugging
+resource "aws_cloudwatch_log_group" "lambda_logs" {
+  name              = "/aws/lambda/${aws_lambda_function.gbfs_collector.function_name}"
+  retention_in_days = 2
+
+  tags = {
+    Environment = var.environment
+  }
+}
+
+# Add explicit CloudWatch Logs permission to Lambda role
+resource "aws_iam_role_policy_attachment" "lambda_logs" {
+  role       = aws_iam_role.lambda_role.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
 
 # Add required S3 permissions to Lambda role

@@ -25,8 +25,16 @@ async function collectProviderData(provider: GBFSProvider): Promise<BikeStats> {
   
   // Fetch GBFS feed data
   const gbfsData = await fetchGBFSData(provider.url);
-  const feeds = gbfsData.data.en.feeds;
-  
+  let feeds = gbfsData.data.en?.feeds;
+  if(!feeds) {
+    feeds = gbfsData.data.feeds;
+    if(!feeds) {
+      feeds = gbfsData.data.de?.feeds;
+    }
+  }
+  if(!feeds) {
+    throw new Error(`No feeds found for provider ${provider.name}`);
+  }
   // Get station information and status URLs
   const stationInfoUrl = feeds.find(f => f.name === 'station_information')?.url;
   const stationStatusUrl = feeds.find(f => f.name === 'station_status')?.url;
@@ -142,7 +150,7 @@ async function storeData(stats: BikeStats): Promise<void> {
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
     const providers: GBFSProvider[] = JSON.parse(process.env.PROVIDERS!);
-    
+    console.log(`providers: ${JSON.stringify(providers)}`)
     const results = await Promise.allSettled(
       providers.map(async (provider) => {
         try {
