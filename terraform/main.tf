@@ -202,20 +202,20 @@ resource "aws_quicksight_data_source" "gbfs_s3" {
     }
   }
 
-  permission {
-    actions   = [
-      "quicksight:UpdateDataSourcePermissions", 
-      "quicksight:DescribeDataSource", 
-      "quicksight:DescribeDataSourcePermissions", 
-      "quicksight:PassDataSource", 
-      "quicksight:UpdateDataSource", 
-      "quicksight:DeleteDataSource"
-      ]
-    principal = "arn:aws:quicksight:${var.aws_region}:${data.aws_caller_identity.current.account_id}:user/default/${var.quicksight_admin_user}"
-  }
-
   ssl_properties {
     disable_ssl = false
+  }
+
+  permission {
+    actions = [
+      "quicksight:UpdateDataSourcePermissions",
+      "quicksight:DescribeDataSource",
+      "quicksight:DescribeDataSourcePermissions",
+      "quicksight:PassDataSource",
+      "quicksight:UpdateDataSource",
+      "quicksight:DeleteDataSource"
+    ]
+    principal = "arn:aws:quicksight:${var.aws_region}:${data.aws_caller_identity.current.account_id}:user/default/${var.quicksight_admin_user}"
   }
 
   tags = {
