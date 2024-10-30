@@ -418,7 +418,7 @@ resource "aws_lambda_permission" "allow_eventbridge" {
 # Add CloudWatch Logs for debugging
 resource "aws_cloudwatch_log_group" "lambda_logs" {
   name              = "/aws/lambda/${aws_lambda_function.gbfs_collector.function_name}"
-  retention_in_days = 2
+  retention_in_days = 1
 
   tags = {
     Environment = var.environment
