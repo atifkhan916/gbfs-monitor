@@ -74,7 +74,7 @@ resource "aws_s3_object" "quicksight_manifest" {
     fileLocations = [
       {
         URIPrefixes = [
-          "s3://${aws_s3_bucket.gbfs_historical_data.id}/data/",    # Historical data directory
+          "s3://${aws_s3_bucket.gbfs_historical_data.id}/historical/",    # Historical data directory
           "s3://${aws_s3_bucket.gbfs_historical_data.id}/realtime/" # Realtime data directory
         ]
       }
@@ -91,7 +91,7 @@ resource "aws_s3_object" "quicksight_manifest" {
 }
 
 resource "aws_s3_object" "data_folders" {
-  for_each = toset(["data/", "realtime/"])
+  for_each = toset(["historical/", "realtime/"])
   
   bucket        = aws_s3_bucket.gbfs_historical_data.id
   key           = each.key
@@ -188,7 +188,7 @@ resource "aws_quicksight_data_source" "gbfs_s3" {
     aws_quicksight_user.users
   ]
 
-  data_source_id = "${var.project_name}-s3-source"
+  data_source_id = "${var.environment}-${var.project_name}-s3-source"
   aws_account_id = data.aws_caller_identity.current.account_id
   name           = "GBFS Historical Data"
   type           = "S3"
@@ -281,8 +281,13 @@ resource "aws_quicksight_data_set" "gbfs_dataset" {
       "quicksight:DescribeDataSet",
       "quicksight:DescribeDataSetPermissions",
       "quicksight:PassDataSet",
+      "quicksight:DescribeIngestion",
+      "quicksight:ListIngestions",
       "quicksight:UpdateDataSet",
-      "quicksight:DeleteDataSet"
+      "quicksight:DeleteDataSet",
+      "quicksight:CreateIngestion",
+      "quicksight:CancelIngestion",
+      "quicksight:UpdateDataSetPermissions"
     ]
     principal = "arn:aws:quicksight:${var.aws_region}:${data.aws_caller_identity.current.account_id}:user/default/${var.quicksight_admin_user}"
   }
