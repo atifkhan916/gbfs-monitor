@@ -36,7 +36,7 @@ const Dashboard: React.FC = () => {
   const [timeRange, setTimeRange] = useState<string>("2");
   const [websocket, setWebsocket] = useState<WebSocket | null>(null);
 
-  const wsUrl = process.env.REACT_APP_WEBSOCKET_URL;
+  const wsUrl = 'wss://'+process.env.REACT_APP_WEBSOCKET_URL;
 
   const formatTime = (timestamp: number): string => {
     return new Date(timestamp * 1000).toLocaleTimeString([], { 
