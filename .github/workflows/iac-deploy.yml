@@ -155,9 +155,9 @@ jobs:
         cd "$TF_DIR"
         
         # Get outputs and set them as environment variables
-        WEBSOCKET_URL=$(terraform output -raw websocket_url)
-        CLOUDFRONT_ID=$(terraform output -raw cloudfront_distribution_id)
-        WEBSITE_BUCKET=$(terraform output -raw website_s3_bucket_name)
+        WEBSOCKET_URL=$(terraform output -raw websocket_url | grep -o 'wss://[^[:space:]]*')
+        CLOUDFRONT_ID=$(terraform output -raw cloudfront_distribution_id | grep -o 'E[A-Z0-9]*')
+        WEBSITE_BUCKET=$(terraform output -raw website_s3_bucket_name | grep -o '[a-zA-Z0-9_-]*')
         
         # Save to GitHub Environment
         echo "WEBSOCKET_URL=${WEBSOCKET_URL}" >> $GITHUB_ENV
