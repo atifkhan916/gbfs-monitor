@@ -163,9 +163,9 @@ jobs:
         
         # Print for verification
         echo "Final outputs:"
-        echo "WebSocket URL: ${env.WEBSOCKET_URL}"
-        echo "CloudFront ID: ${env.CLOUDFRONT_ID}"
-        echo "Website bucket Name: ${env.WEBSITE_BUCKET}"
+        echo "WebSocket URL: ${{ env.WEBSOCKET_URL }}"
+        echo "CloudFront ID: ${{ env.CLOUDFRONT_ID }}"
+        echo "Website bucket Name: ${{ env.WEBSITE_BUCKET }}"
         
         echo "Script completed!"
       shell: bash
