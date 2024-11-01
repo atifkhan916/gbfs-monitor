@@ -13,11 +13,6 @@ variable "project_name" {
   default     = "gbfs-monitor"
 }
 
-variable "notification_email" {
-  description = "Email address for QuickSight notifications"
-  type        = string
-}
-
 variable "gbfs_providers" {
   description = "List of GBFS providers to monitor"
   type = list(object({
