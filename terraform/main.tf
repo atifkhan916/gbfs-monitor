@@ -1,221 +1,101 @@
-data "aws_caller_identity" "current" {}
-
-# S3 bucket for storing historical data
-resource "aws_s3_bucket" "gbfs_historical_data" {
-  bucket = "${var.environment}-${var.project_name}-historical-data"
+# S3 and CloudFront for hosting React SPA
+resource "aws_s3_bucket" "website" {
+  bucket = "${var.environment}-${var.project_name}-website"
 }
 
-resource "aws_s3_bucket_versioning" "versioning" {
-  bucket = aws_s3_bucket.gbfs_historical_data.id
-  versioning_configuration {
-    status = "Enabled"
+resource "aws_s3_bucket_website_configuration" "website" {
+  bucket = aws_s3_bucket.website.id
+
+  index_document {
+    suffix = "index.html"
+  }
+
+  error_document {
+    key = "index.html"
   }
 }
 
-# Add lifecycle rules
-resource "aws_s3_bucket_lifecycle_configuration" "bucket_lifecycle" {
-  bucket = aws_s3_bucket.gbfs_historical_data.id
+resource "aws_s3_bucket_public_access_block" "website" {
+  bucket = aws_s3_bucket.website.id
 
-  rule {
-    id     = "archive_old_data"
-    status = "Enabled"
-
-    transition {
-      days          = 30
-      storage_class = "STANDARD_IA"
-    }
-
-    transition {
-      days          = 90
-      storage_class = "GLACIER"
-    }
-
-    noncurrent_version_transition {
-      noncurrent_days = 30
-      storage_class   = "GLACIER"
-    }
-  }
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
 }
 
-# Add a bucket policy to explicitly allow QuickSight access
-resource "aws_s3_bucket_policy" "quicksight_access" {
-  bucket = aws_s3_bucket.gbfs_historical_data.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      { 
-        Sid    = "AllowQuickSightS3Access"
-        Effect = "Allow"
-        Principal = {
-          Service = "quicksight.amazonaws.com"
-        }
-        Action = [
-          "s3:GetObject",
-          "s3:GetObjectVersion",
-          "s3:ListBucket",
-          "s3:GetBucketLocation",
-          "s3:ListBucketMultipartUploads"
-        ]
-        Resource = [
-          aws_s3_bucket.gbfs_historical_data.arn,
-          "${aws_s3_bucket.gbfs_historical_data.arn}/*"
-        ]
-      }
-    ]
-  })
+resource "aws_cloudfront_origin_access_identity" "website" {
+  comment = "OAI for ${var.environment}-${var.project_name} website"
 }
 
-# Create a single consolidated manifest file
-resource "aws_s3_object" "quicksight_manifest" {
-  bucket  = aws_s3_bucket.gbfs_historical_data.id
-  key     = "manifest.json"
-  content = jsonencode({
-    fileLocations = [
-      {
-        URIPrefixes = [
-          "s3://${aws_s3_bucket.gbfs_historical_data.id}/historical/",    # Historical data directory
-          "s3://${aws_s3_bucket.gbfs_historical_data.id}/realtime/" # Realtime data directory
-        ]
-      }
-    ],
-    globalUploadSettings = {
-      format         = "JSON"
-      delimiter      = ","
-      textqualifier = "'"
-      containsHeader = "true"
-    }
-  })
-  content_type = "application/json"
-  acl          = "private"
-}
-
-resource "aws_s3_object" "data_folders" {
-  for_each = toset(["historical/", "realtime/"])
-  
-  bucket        = aws_s3_bucket.gbfs_historical_data.id
-  key           = each.key
-  content_type  = "application/x-directory"
-}
-
-
-# IAM role for QuickSight
-resource "aws_iam_role" "quicksight_role" {
-  name = "${var.environment}-${var.project_name}-quicksight-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = "sts:AssumeRole"
-        Effect = "Allow"
-        Principal = {
-          Service = "quicksight.amazonaws.com"
-        }
-      }
-    ]
-  })
-}
-
-resource "aws_iam_role_policy" "quicksight_policy" {
-  name = "${var.environment}-${var.project_name}-quicksight-policy"
-  role = aws_iam_role.quicksight_role.id
-
+resource "aws_s3_bucket_policy" "website" {
+  bucket = aws_s3_bucket.website.id
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
       {
-        Effect = "Allow"
-        Action = [
-          "s3:GetObject",
-          "s3:GetObjectVersion",
-          "s3:ListBucket",
-          "s3:GetBucketLocation",
-          "s3:ListBucketMultipartUploads",
-          "s3:ListMultipartUploadParts"
-        ]
-        Resource = [
-          aws_s3_bucket.gbfs_historical_data.arn,
-          "${aws_s3_bucket.gbfs_historical_data.arn}/*"
-        ]
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "quicksight:PassDataSource",
-          "quicksight:DescribeDataSource",
-          "quicksight:CreateDataSource",
-          "quicksight:UpdateDataSource"
-        ]
-        Resource = "arn:aws:quicksight:*:${data.aws_caller_identity.current.account_id}:datasource/*"
+        Sid       = "AllowCloudFrontOAI"
+        Effect    = "Allow"
+        Principal = {
+          AWS = aws_cloudfront_origin_access_identity.website.iam_arn
+        }
+        Action   = "s3:GetObject"
+        Resource = "${aws_s3_bucket.website.arn}/*"
       }
     ]
   })
 }
 
+resource "aws_cloudfront_distribution" "website" {
+  enabled             = true
+  is_ipv6_enabled     = true
+  default_root_object = "index.html"
+  price_class         = "PriceClass_100"
 
-# QuickSight resources
-resource "aws_quicksight_account_subscription" "quicksight" {
-  account_name          = "${var.environment}-${var.project_name}"
-  authentication_method = "IAM_AND_QUICKSIGHT"
-  edition              = "ENTERPRISE"  # or "ENTERPRISE" based on your needs
-  notification_email   = var.notification_email
-  aws_account_id      = data.aws_caller_identity.current.account_id
-  
-}
+  origin {
+    domain_name = aws_s3_bucket.website.bucket_regional_domain_name
+    origin_id   = "S3-${aws_s3_bucket.website.bucket}"
 
-resource "aws_quicksight_user" "users" {
-  for_each = var.quicksight_users
+    s3_origin_config {
+      origin_access_identity = aws_cloudfront_origin_access_identity.website.cloudfront_access_identity_path
+    }
+  }
 
-  aws_account_id = data.aws_caller_identity.current.account_id
-  namespace = each.value.namespace
-  user_name = each.key
-  email = each.value.email
-  user_role = each.value.role
-  identity_type = "QUICKSIGHT"
+  default_cache_behavior {
+    allowed_methods        = ["GET", "HEAD"]
+    cached_methods         = ["GET", "HEAD"]
+    target_origin_id       = "S3-${aws_s3_bucket.website.bucket}"
+    viewer_protocol_policy = "redirect-to-https"
+    compress               = true
 
-  depends_on = [aws_quicksight_account_subscription.quicksight]
-
-}
-
-
-resource "aws_quicksight_data_source" "gbfs_s3" {
-  depends_on = [
-    aws_quicksight_account_subscription.quicksight,
-    aws_iam_role_policy.quicksight_policy,
-    aws_s3_bucket_policy.quicksight_access,
-    aws_s3_object.quicksight_manifest,
-    aws_quicksight_user.users
-  ]
-
-  data_source_id = "${var.environment}-${var.project_name}-s3-source"
-  aws_account_id = data.aws_caller_identity.current.account_id
-  name           = "GBFS Historical Data"
-  type           = "S3"
-
-  parameters {
-    s3 {
-      manifest_file_location {
-        bucket = aws_s3_bucket.gbfs_historical_data.id
-        key    = aws_s3_object.quicksight_manifest.key
+    forwarded_values {
+      query_string = false
+      cookies {
+        forward = "none"
       }
     }
   }
 
-  permission {
-    actions   = [
-      "quicksight:UpdateDataSourcePermissions", 
-      "quicksight:DescribeDataSource", 
-      "quicksight:DescribeDataSourcePermissions", 
-      "quicksight:PassDataSource", 
-      "quicksight:UpdateDataSource", 
-      "quicksight:DeleteDataSource"
-      ]
-    principal = "arn:aws:quicksight:${var.aws_region}:${data.aws_caller_identity.current.account_id}:user/default/${var.quicksight_admin_user}"
+  custom_error_response {
+    error_code         = 403
+    response_code      = 200
+    response_page_path = "/index.html"
   }
 
-  ssl_properties {
-    disable_ssl = false
+  custom_error_response {
+    error_code         = 404
+    response_code      = 200
+    response_page_path = "/index.html"
+  }
+
+  restrictions {
+    geo_restriction {
+      restriction_type = "none"
+    }
+  }
+
+  viewer_certificate {
+    cloudfront_default_certificate = true
   }
 
   tags = {
@@ -223,102 +103,88 @@ resource "aws_quicksight_data_source" "gbfs_s3" {
   }
 }
 
-# Define the QuickSight dataset
-resource "aws_quicksight_data_set" "gbfs_dataset" {
-  depends_on = [ aws_quicksight_data_source.gbfs_s3 ]
+# DynamoDB Tables
+resource "aws_dynamodb_table" "bike_stats" {
+  name           = "${var.environment}-${var.project_name}-bike-stats"
+  billing_mode   = "PAY_PER_REQUEST"
+  hash_key       = "provider_id"
+  range_key      = "timestamp"
 
-  aws_account_id = data.aws_caller_identity.current.account_id
-  data_set_id    = "${var.environment}-${var.project_name}-gbfs-dataset"
-  name           = "${var.environment} GBFS DataSet"
+  attribute {
+    name = "provider_id"
+    type = "S"
+  }
 
-  import_mode = "SPICE"
+  attribute {
+    name = "timestamp"
+    type = "N"
+  }
 
-  physical_table_map {
-    physical_table_map_id = "${var.environment}-${var.project_name}-gbfs-table-map-id"
-    s3_source {
-      data_source_arn =  aws_quicksight_data_source.gbfs_s3.arn
-      input_columns {
-        name = "provider"
-        type = "STRING"
-      }
-      input_columns {
-        name = "total_stations"
-        type = "STRING"
-      }
-      input_columns {
-        name = "total_capacity"
-        type = "STRING"
-      }
-      input_columns {
-        name = "total_bikes_available"
-        type = "STRING"
-      }
+  attribute {
+    name = "date"
+    type = "S"
+  }
 
-      input_columns {
-        name = "total_docks_available"
-        type = "STRING"
-      }
+  global_secondary_index {
+    name            = "DateIndex"
+    hash_key        = "date"
+    range_key       = "timestamp"
+    projection_type = "ALL"
+  }
 
-      input_columns {
-        name = "active_stations"
-        type = "STRING"
-      }
+  # Enable TTL
+  ttl {
+    attribute_name = "expiry_time"
+    enabled        = true
+  }
 
-      input_columns {
-        name = "datetime"
-        type = "STRING"  # This assumes isoDateTime is in a format QuickSight can recognize as a datetime
-      }
+  tags = {
+    Environment = var.environment
+  }
+}
 
-      upload_settings {
-        format = "JSON"
-      }
+resource "aws_dynamodb_table" "websocket_connections" {
+  name           = "${var.environment}-${var.project_name}-connections"
+  billing_mode   = "PAY_PER_REQUEST"
+  hash_key       = "connection_id"
+
+  attribute {
+    name = "connection_id"
+    type = "S"
+  }
+
+  tags = {
+    Environment = var.environment
+  }
+}
+
+# Lambda function for cleaning up old data
+resource "aws_lambda_function" "cleanup" {
+  filename         = "../build/cleanup.zip"
+  function_name    = "${var.environment}-${var.project_name}-cleanup"
+  role            = aws_iam_role.cleanup_lambda_role.arn
+  handler         = "index.handler"
+  runtime         = "nodejs18.x"
+  timeout         = 300
+  memory_size     = 256
+  source_code_hash = filebase64sha256("../build/cleanup.zip")
+
+  environment {
+    variables = {
+      DYNAMODB_TABLE = aws_dynamodb_table.bike_stats.name
+      RETENTION_DAYS = "5"
+      PROVIDERS    = jsonencode(var.gbfs_providers)
     }
   }
 
-  # Define permissions for the dataset
-  permissions {
-    actions = [
-      "quicksight:DescribeDataSet",
-      "quicksight:DescribeDataSetPermissions",
-      "quicksight:PassDataSet",
-      "quicksight:DescribeIngestion",
-      "quicksight:ListIngestions",
-      "quicksight:UpdateDataSet",
-      "quicksight:DeleteDataSet",
-      "quicksight:CreateIngestion",
-      "quicksight:CancelIngestion",
-      "quicksight:UpdateDataSetPermissions"
-    ]
-    principal = "arn:aws:quicksight:${var.aws_region}:${data.aws_caller_identity.current.account_id}:user/default/${var.quicksight_admin_user}"
+  tags = {
+    Environment = var.environment
   }
 }
 
-locals {
-  start_time = timeadd(timestamp(), "5m")
-}
-
-# Set up incremental refresh 
-resource "aws_quicksight_refresh_schedule" "incremental_refresh" {
-  depends_on = [aws_quicksight_data_source.gbfs_s3, aws_quicksight_data_set.gbfs_dataset]
-
-  aws_account_id = data.aws_caller_identity.current.account_id
-  data_set_id     = aws_quicksight_data_set.gbfs_dataset.data_set_id
-  schedule_id    = "IncrementalRefresh"
-
-  schedule {
-    refresh_type = "INCREMENTAL_REFRESH"
-    start_after_date_time = formatdate("YYYY-MM-DD'T'hh:mm:ss", local.start_time)
-    schedule_frequency {
-      interval = "MINUTE15"  
-    }
-  }
-}
-
-
-
-# IAM role for Lambda functions
-resource "aws_iam_role" "lambda_role" {
-  name = "${var.environment}-${var.project_name}-lambda-role"
+# IAM role for cleanup Lambda
+resource "aws_iam_role" "cleanup_lambda_role" {
+  name = "${var.environment}-${var.project_name}-cleanup-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -332,22 +198,12 @@ resource "aws_iam_role" "lambda_role" {
       }
     ]
   })
-
-  tags = {
-    Environment = var.environment
-  }
 }
 
-# Basic Lambda execution policy
-resource "aws_iam_role_policy_attachment" "lambda_basic" {
-  role       = aws_iam_role.lambda_role.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
-}
-
-# Custom policy for Lambda to access other AWS services
-resource "aws_iam_role_policy" "lambda_policy" {
-  name = "${var.environment}-${var.project_name}-lambda-policy"
-  role = aws_iam_role.lambda_role.id
+# IAM policy for cleanup Lambda
+resource "aws_iam_role_policy" "cleanup_lambda_policy" {
+  name = "${var.environment}-${var.project_name}-cleanup-policy"
+  role = aws_iam_role.cleanup_lambda_role.id
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -355,41 +211,132 @@ resource "aws_iam_role_policy" "lambda_policy" {
       {
         Effect = "Allow"
         Action = [
-          "s3:PutObject",
-          "s3:GetObject",
-          "s3:ListBucket"
+          "dynamodb:Query",
+          "dynamodb:DeleteItem",
+          "dynamodb:BatchWriteItem"
         ]
         Resource = [
-          aws_s3_bucket.gbfs_historical_data.arn,
-          "${aws_s3_bucket.gbfs_historical_data.arn}/*"
-        ]
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "sns:Publish"
-        ]
-        Resource = [
-          aws_sns_topic.alerts.arn
+          aws_dynamodb_table.bike_stats.arn,
+          "${aws_dynamodb_table.bike_stats.arn}/index/*"
         ]
       }
     ]
   })
 }
 
-# Lambda function for data collection
-resource "aws_lambda_function" "gbfs_collector" {
-  filename      = "../build/collector.zip"
+# CloudWatch Event for cleanup Lambda (runs daily)
+resource "aws_cloudwatch_event_rule" "cleanup_schedule" {
+  name                = "${var.environment}-${var.project_name}-cleanup-schedule"
+  description         = "Schedule for cleaning up old bike stats data"
+  schedule_expression = "rate(1 day)"
+}
+
+resource "aws_cloudwatch_event_target" "cleanup_target" {
+  rule      = aws_cloudwatch_event_rule.cleanup_schedule.name
+  target_id = "CleanupLambda"
+  arn       = aws_lambda_function.cleanup.arn
+}
+
+resource "aws_lambda_permission" "allow_cleanup_eventbridge" {
+  statement_id  = "AllowEventBridgeInvoke"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.cleanup.function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.cleanup_schedule.arn
+}
+
+# API Gateway WebSocket API
+resource "aws_apigatewayv2_api" "websocket" {
+  name                       = "${var.environment}-${var.project_name}-websocket"
+  protocol_type             = "WEBSOCKET"
+  route_selection_expression = "$request.body.action"
+}
+
+
+resource "aws_apigatewayv2_integration" "connect" {
+  api_id                    = aws_apigatewayv2_api.websocket.id
+  integration_type          = "AWS_PROXY"
+  integration_uri          = aws_lambda_function.websocket_handler.invoke_arn
+  content_handling_strategy = "CONVERT_TO_TEXT"
+  credentials_arn         = aws_iam_role.apigw_role.arn
+  description            = "Connect integration"
+  integration_method     = "POST"
+  passthrough_behavior   = "WHEN_NO_MATCH"
+}
+
+resource "aws_apigatewayv2_integration" "disconnect" {
+  api_id                    = aws_apigatewayv2_api.websocket.id
+  integration_type          = "AWS_PROXY"
+  integration_uri          = aws_lambda_function.websocket_handler.invoke_arn
+  content_handling_strategy = "CONVERT_TO_TEXT"
+  credentials_arn         = aws_iam_role.apigw_role.arn
+  description            = "Disconnect integration"
+  integration_method     = "POST"
+  passthrough_behavior   = "WHEN_NO_MATCH"
+}
+
+resource "aws_apigatewayv2_integration" "default" {
+  api_id                    = aws_apigatewayv2_api.websocket.id
+  integration_type          = "AWS_PROXY"
+  integration_uri          = aws_lambda_function.websocket_handler.invoke_arn
+  content_handling_strategy = "CONVERT_TO_TEXT"
+  credentials_arn         = aws_iam_role.apigw_role.arn
+  description            = "Default integration"
+  integration_method     = "POST"
+  passthrough_behavior   = "WHEN_NO_MATCH"
+}
+
+resource "aws_apigatewayv2_route" "connect" {
+  api_id    = aws_apigatewayv2_api.websocket.id
+  route_key = "$connect"
+  target    = "integrations/${aws_apigatewayv2_integration.connect.id}"
+}
+
+resource "aws_apigatewayv2_route" "disconnect" {
+  api_id    = aws_apigatewayv2_api.websocket.id
+  route_key = "$disconnect"
+  target    = "integrations/${aws_apigatewayv2_integration.disconnect.id}"
+}
+
+resource "aws_apigatewayv2_route" "default" {
+  api_id    = aws_apigatewayv2_api.websocket.id
+  route_key = "$default"
+  target    = "integrations/${aws_apigatewayv2_integration.default.id}"
+}
+
+# IAM Role for API Gateway
+resource "aws_iam_role" "apigw_role" {
+  name = "${var.environment}-${var.project_name}-apigw-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "apigateway.amazonaws.com"
+        }
+      }
+    ]
+  })
+}
+
+# Lambda Functions
+resource "aws_lambda_function" "collector" {
+  filename         = "../build/collector.zip"
   function_name    = "${var.environment}-${var.project_name}-collector"
-  role            = aws_iam_role.lambda_role.arn
+  role            = aws_iam_role.collector_lambda_role.arn
   handler         = "index.handler"
   runtime         = "nodejs18.x"
   timeout         = 300
+  memory_size     = 256
+  source_code_hash = filebase64sha256("../build/collector.zip")
 
   environment {
     variables = {
-      PROVIDERS = jsonencode(var.gbfs_providers)
-      S3_BUCKET = aws_s3_bucket.gbfs_historical_data.id
+      DYNAMODB_TABLE  = aws_dynamodb_table.bike_stats.name
+      PROVIDERS       = jsonencode(var.gbfs_providers)
     }
   }
 
@@ -398,52 +345,30 @@ resource "aws_lambda_function" "gbfs_collector" {
   }
 }
 
+resource "aws_lambda_function" "websocket_handler" {
+  filename         = "../build/websocket.zip"
+  function_name    = "${var.environment}-${var.project_name}-websocket"
+  role            = aws_iam_role.websocket_lambda_role.arn
+  handler         = "index.handler"
+  runtime         = "nodejs18.x"
+  timeout         = 30
+  source_code_hash = filebase64sha256("../build/websocket.zip")
 
-# CloudWatch Event Rule to trigger Lambda
-resource "aws_cloudwatch_event_rule" "collector_schedule" {
-  name                = "${var.environment}-${var.project_name}-collector-schedule"
-  description         = "Trigger GBFS data collection every 5 minutes"
-  schedule_expression = "rate(15 minutes)"
-  tags = {
-    Environment = var.environment
+  environment {
+    variables = {
+      CONNECTIONS_TABLE = aws_dynamodb_table.websocket_connections.name
+      BIKE_STATS_TABLE = aws_dynamodb_table.bike_stats.name
+    }
   }
-}
-
-resource "aws_cloudwatch_event_target" "collector_target" {
-  rule      = aws_cloudwatch_event_rule.collector_schedule.name
-  target_id = "CollectorLambda"
-  arn       = aws_lambda_function.gbfs_collector.arn
-}
-
-# Permission for EventBridge to invoke Lambda
-resource "aws_lambda_permission" "allow_eventbridge" {
-  statement_id  = "AllowEventBridgeInvoke"
-  action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.gbfs_collector.function_name
-  principal     = "events.amazonaws.com"
-  source_arn    = aws_cloudwatch_event_rule.collector_schedule.arn
-}
-
-# Add CloudWatch Logs for debugging
-resource "aws_cloudwatch_log_group" "lambda_logs" {
-  name              = "/aws/lambda/${aws_lambda_function.gbfs_collector.function_name}"
-  retention_in_days = 1
 
   tags = {
     Environment = var.environment
   }
 }
 
-# Add explicit CloudWatch Logs permission to Lambda role
-resource "aws_iam_role_policy_attachment" "lambda_logs" {
-  role       = aws_iam_role.lambda_role.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
-}
-
-# Add required S3 permissions to Lambda role
-resource "aws_iam_role_policy" "lambda_s3_policy" {
-  name = "${var.environment}-${var.project_name}-lambda-s3-policy"
-  role = aws_iam_role.lambda_role.id
+resource "aws_iam_role_policy" "apigw_policy" {
+  name = "${var.environment}-${var.project_name}-apigw-policy"
+  role = aws_iam_role.apigw_role.id
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -451,29 +376,210 @@ resource "aws_iam_role_policy" "lambda_s3_policy" {
       {
         Effect = "Allow"
         Action = [
-          "s3:GetObject",
-          "s3:ListBucket"
+          "lambda:InvokeFunction"
         ]
         Resource = [
-          aws_s3_bucket.gbfs_historical_data.arn,
-          "${aws_s3_bucket.gbfs_historical_data.arn}/*"
+          aws_lambda_function.websocket_handler.arn
         ]
+      }
+    ]
+  })
+
+  depends_on = [ aws_lambda_function.websocket_handler ]
+}
+
+# Lambda permission for API Gateway
+resource "aws_lambda_permission" "websocket" {
+  statement_id  = "AllowAPIGatewayInvoke"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.websocket_handler.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_apigatewayv2_api.websocket.execution_arn}/*"
+}
+
+resource "aws_apigatewayv2_deployment" "websocket" {
+  api_id = aws_apigatewayv2_api.websocket.id
+
+  depends_on = [
+    aws_apigatewayv2_route.connect,
+    aws_apigatewayv2_route.disconnect,
+    aws_apigatewayv2_route.default
+  ]
+}
+
+resource "aws_apigatewayv2_stage" "websocket" {
+  api_id = aws_apigatewayv2_api.websocket.id
+  name   = var.environment
+  deployment_id = aws_apigatewayv2_deployment.websocket.id
+
+  default_route_settings {
+    throttling_burst_limit = 100
+    throttling_rate_limit  = 50
+    detailed_metrics_enabled = true
+  }
+}
+
+# IAM Roles and Policies
+resource "aws_iam_role" "collector_lambda_role" {
+  name = "${var.environment}-${var.project_name}-collector-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "lambda.amazonaws.com"
+        }
       }
     ]
   })
 }
 
-# SNS Topic for alerts
-resource "aws_sns_topic" "alerts" {
-  name = "${var.environment}-${var.project_name}-alerts"
+resource "aws_iam_role_policy" "collector_lambda_policy" {
+  name = "${var.environment}-${var.project_name}-collector-policy"
+  role = aws_iam_role.collector_lambda_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "dynamodb:PutItem",
+          "dynamodb:Query",
+          "dynamodb:Scan"
+        ]
+        Resource = aws_dynamodb_table.bike_stats.arn
+      }
+    ]
+  })
 }
 
-# API Gateway for dashboard data
-resource "aws_api_gateway_rest_api" "gbfs_api" {
-  name = "${var.environment}-${var.project_name}-api"
-  
-  tags = {
-    Environment = var.environment
+resource "aws_iam_role" "websocket_lambda_role" {
+  name = "${var.environment}-${var.project_name}-websocket-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "lambda.amazonaws.com"
+        }
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy" "websocket_lambda_policy" {
+  name = "${var.environment}-${var.project_name}-websocket-policy"
+  role = aws_iam_role.websocket_lambda_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "dynamodb:PutItem",
+          "dynamodb:DeleteItem",
+          "dynamodb:Query",
+          "dynamodb:Scan"
+        ]
+        Resource = [
+          aws_dynamodb_table.websocket_connections.arn,
+          aws_dynamodb_table.bike_stats.arn,
+          "${aws_dynamodb_table.bike_stats.arn}/index/*"
+        ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "execute-api:ManageConnections"
+        ]
+        Resource = "${aws_apigatewayv2_api.websocket.execution_arn}/${var.environment}/*"
+      }
+    ]
+  })
+}
+
+# CloudWatch Event for Collector Lambda
+resource "aws_cloudwatch_event_rule" "collector_schedule" {
+  name                = "${var.environment}-${var.project_name}-collector-schedule"
+  description         = "Schedule for GBFS data collection"
+  schedule_expression = "rate(15 minutes)"
+}
+
+resource "aws_cloudwatch_event_target" "collector_target" {
+  rule      = aws_cloudwatch_event_rule.collector_schedule.name
+  target_id = "CollectorLambda"
+  arn       = aws_lambda_function.collector.arn
+}
+
+resource "aws_lambda_permission" "allow_eventbridge" {
+  statement_id  = "AllowEventBridgeInvoke"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.collector.function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.collector_schedule.arn
+}
+
+resource "aws_cloudwatch_log_group" "collector" {
+  name              = "/aws/lambda/${aws_lambda_function.collector.function_name}"
+  retention_in_days = 1
+}
+
+resource "aws_cloudwatch_log_group" "websocket" {
+  name              = "/aws/lambda/${aws_lambda_function.websocket_handler.function_name}"
+  retention_in_days = 1
+}
+
+resource "aws_cloudwatch_log_group" "cleanup" {
+  name              = "/aws/lambda/${aws_lambda_function.cleanup.function_name}"
+  retention_in_days = 1
+}
+
+resource "aws_iam_role_policy" "lambda_logging" {
+  for_each = {
+    collector = aws_iam_role.collector_lambda_role.id
+    websocket = aws_iam_role.websocket_lambda_role.id
+    cleanup   = aws_iam_role.cleanup_lambda_role.id
   }
+
+  name = "${var.environment}-${var.project_name}-${each.key}-logs"
+  role = each.value
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ]
+        Resource = "arn:aws:logs:*:*:*"
+      }
+    ]
+  })
 }
 
+output "websocket_url" {
+  value = "wss://${aws_apigatewayv2_api.websocket.id}.execute-api.${var.aws_region}.amazonaws.com/${var.environment}"
+  description = "WebSocket URL for frontend connection"
+}
+
+
+# Output the cloudfront_distribution_id for the frontend
+output "cloudfront_distribution_id" {
+  value = "${aws_cloudfront_distribution.website.id}"
+}
+
+# Output the cloudfront_distribution_id for the frontend
+output "website_s3_bucket_name" {
+  value = "${aws_s3_bucket.website.bucket}"
+}

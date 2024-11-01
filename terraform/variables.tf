@@ -18,21 +18,6 @@ variable "notification_email" {
   type        = string
 }
 
-variable "quicksight_users" {
-  description = "Map of QuickSight users and their configurations"
-  type = map(object({
-    email     = string
-    role      = string  # ADMIN, AUTHOR, or READER
-    namespace = string  # default is "default"
-  }))
-}
-
-variable "quicksight_admin_user" {
-  description = "Primary QuickSight admin username"
-  type        = string
-  default     = "adminuser"
-}
-
 variable "gbfs_providers" {
   description = "List of GBFS providers to monitor"
   type = list(object({
