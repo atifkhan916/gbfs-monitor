@@ -164,14 +164,16 @@ jobs:
 
     - name: Build React App
       run: |
-        echo "CURRENT_DIR=$(pwd)"
-        echo "CURRENT_DIR_FILES=$(ls)"
         cd "$REACT_APP_DIR"
         
         # Create .env file with the WebSocket URL from Terraform output
         echo "REACT_APP_WEBSOCKET_URL=${{ env.WEBSOCKET_URL }}" > .env
+        cat .env
         
-        # Build the React app
+        npm ci --legacy-peer-deps
+
+        # Build the application
+        echo "Building React application..."
         npm run build
       env:
         CI: false
@@ -187,7 +189,7 @@ jobs:
         echo "Deploying React app to S3 bucket: $BUCKET_NAME"
         
         # Sync build folder with S3 bucket
-        aws s3 sync $REACT_APP_DIR/build/ s3://$BUCKET_NAME --region ${{ env.AWS_REGION }} --delete
+        aws s3 sync $REACT_APP_DIR/build/ s3://$BUCKET_NAME --region ${{ env.AWS_REGION }} --delete --cache-control "max-age=31536000"
         
         # Invalidate CloudFront cache using the ID from Terraform output
         if [[ -n "${{ env.CLOUDFRONT_ID }}" ]]; then
