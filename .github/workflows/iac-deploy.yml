@@ -165,7 +165,8 @@ jobs:
     - name: Build React App
       run: |
         echo "CURRENT_DIR=$(pwd)"
-        cd "../$REACT_APP_DIR"
+        echo "CURRENT_DIR_FILES=$(ls)"
+        cd "$REACT_APP_DIR"
         
         # Create .env file with the WebSocket URL from Terraform output
         echo "REACT_APP_WEBSOCKET_URL=${{ env.WEBSOCKET_URL }}" > .env
@@ -179,7 +180,7 @@ jobs:
       if: env.DEPLOY_ENV == 'DEV' || env.DEPLOY_ENV == 'PROD'
       run: |
         echo "CURRENT_DIR=$(pwd)"
-        cd "../../.."
+        echo "CURRENT_DIR_FILES=$(ls)"
         ENV_LOWER=$(echo "${{ env.DEPLOY_ENV }}" | tr '[:upper:]' '[:lower:]')
         BUCKET_NAME="${ENV_LOWER}-gbfs-monitoring-frontend"
         
