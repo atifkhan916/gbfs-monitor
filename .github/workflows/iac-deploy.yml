@@ -197,4 +197,11 @@ jobs:
           aws cloudfront create-invalidation \
             --distribution-id ${{ env.CLOUDFRONT_ID }} \
             --paths "/*"
+          
+          CLOUDFRONT_URL=$(aws cloudfront get-distribution \
+            --id "${{ env.CLOUDFRONT_ID }}" \
+            --query 'Distribution.DomainName' \
+            --output text)
+          
+          echo "CloudFront URL: https://$CLOUDFRONT_URL"
         fi
