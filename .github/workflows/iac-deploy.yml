@@ -58,6 +58,7 @@ jobs:
       uses: hashicorp/setup-terraform@v2
       with:
         terraform_version: '1.5.7'
+        terraform_wrapper: false
 
     # New step to read tfvars
     - name: Read Environment Variables
@@ -147,17 +148,15 @@ jobs:
 
         unset TF_LOG
         # Capture outputs
-        export WEBSOCKET_URL=$(terraform output -raw websocket_url 2>/dev/null)
-        export CLOUDFRONT_ID=$(terraform output -raw cloudfront_distribution_id 2>/dev/null)
-        export WEBSITE_BUCKET=$(terraform output -raw website_s3_bucket_name 2>/dev/null)
+        WEBSOCKET_URL=$(terraform output -raw websocket_url | sed 's/::debug::Terraform.*$//')
+        CLOUDFRONT_ID=$(terraform output -raw cloudfront_distribution_id | sed 's/::debug::Terraform.*$//')
+        WEBSITE_BUCKET=$(terraform output -raw website_s3_bucket_name | sed 's/::debug::Terraform.*$//')
 
         echo "WebSocket URL: $WEBSOCKET_URL"
-        echo "CloudFront ID: $CLOUDFRONT_ID"
-        echo "Website bucket Name: $WEBSITE_BUCKET"
-
-        # Write to GITHUB_ENV
         echo "WEBSOCKET_URL=${WEBSOCKET_URL}" >> $GITHUB_ENV
+        echo "CloudFront ID: $CLOUDFRONT_ID"
         echo "CLOUDFRONT_ID=${CLOUDFRONT_ID}" >> $GITHUB_ENV
+        echo "Website bucket Name: $WEBSITE_BUCKET"
         echo "WEBSITE_BUCKET=${WEBSITE_BUCKET}" >> $GITHUB_ENV
         
         echo "Script completed!"
@@ -165,10 +164,11 @@ jobs:
 
     - name: Build React App
       run: |
-        cd "$REACT_APP_DIR"
+        echo "CURRENT_DIR=$(pwd)"
+        cd "../$REACT_APP_DIR"
         
         # Create .env file with the WebSocket URL from Terraform output
-        echo "REACT_APP_WEBSOCKET_URL=${{ env.WEBSOCKET_URL }}" > .env
+        echo "REACT_APP_WEBSOCKET_URL=${{ WEBSOCKET_URL }}" > .env
         
         # Build the React app
         npm run build
@@ -178,6 +178,8 @@ jobs:
     - name: Deploy to S3
       if: env.DEPLOY_ENV == 'DEV' || env.DEPLOY_ENV == 'PROD'
       run: |
+        echo "CURRENT_DIR=$(pwd)"
+        cd "../../.."
         ENV_LOWER=$(echo "${{ env.DEPLOY_ENV }}" | tr '[:upper:]' '[:lower:]')
         BUCKET_NAME="${ENV_LOWER}-gbfs-monitoring-frontend"
         
