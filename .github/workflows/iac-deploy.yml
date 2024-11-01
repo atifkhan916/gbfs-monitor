@@ -170,18 +170,10 @@ jobs:
         echo "REACT_APP_WEBSOCKET_URL=${{ env.WEBSOCKET_URL }}" > .env
         cat .env
         
-        # Clean install dependencies
-        rm -rf node_modules
-        npm cache clean --force
-        npm install
-        
-        
-        echo "Building React application..."
-        
-        # Run webpack directly without cross-env
-        npm install webpack webpack-cli --save-dev
+        npm install --legacy-peer-deps
     
-        NODE_ENV=production npx webpack --config webpack.config.js
+        echo "Building React application..."
+        npm run build
       env:
         CI: true
         NODE_ENV: production
