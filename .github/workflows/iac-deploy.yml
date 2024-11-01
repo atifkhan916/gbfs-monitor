@@ -171,10 +171,12 @@ jobs:
         cat .env
         
         npm ci --legacy-peer-deps
-
-        # Build the application
+        # Install webpack-cli globally to ensure it's available
+        npm install -g webpack webpack-cli
+        
         echo "Building React application..."
-        npm run build
+        # Run webpack directly without cross-env
+        NODE_ENV=production webpack --config webpack.config.js
       env:
         CI: true
         NODE_ENV: production
