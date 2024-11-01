@@ -147,18 +147,14 @@ jobs:
 
         unset TF_LOG
         # Capture outputs
-        export WEBSOCKET_URL=$(terraform output -raw websocket_url 2>/dev/null)
-        export CLOUDFRONT_ID=$(terraform output -raw cloudfront_distribution_id 2>/dev/null)
-        export WEBSITE_BUCKET=$(terraform output -raw website_s3_bucket_name 2>/dev/null)
+        export WEBSOCKET_URL=$(terraform output -raw websocket_url | sed 's/::debug::Terraform.*$//')
+        export CLOUDFRONT_ID=$(terraform output -raw cloudfront_distribution_id | sed 's/::debug::Terraform.*$//')
+        export WEBSITE_BUCKET=$(terraform output -raw website_s3_bucket_name | sed 's/::debug::Terraform.*$//')
 
         echo "WebSocket URL: $WEBSOCKET_URL"
         echo "CloudFront ID: $CLOUDFRONT_ID"
         echo "Website bucket Name: $WEBSITE_BUCKET"
 
-        # Write to GITHUB_ENV
-        echo "WEBSOCKET_URL=${WEBSOCKET_URL}" >> $GITHUB_ENV
-        echo "CLOUDFRONT_ID=${CLOUDFRONT_ID}" >> $GITHUB_ENV
-        echo "WEBSITE_BUCKET=${WEBSITE_BUCKET}" >> $GITHUB_ENV
         
         echo "Script completed!"
       shell: bash
@@ -168,7 +164,7 @@ jobs:
         cd "$REACT_APP_DIR"
         
         # Create .env file with the WebSocket URL from Terraform output
-        echo "REACT_APP_WEBSOCKET_URL=${{ env.WEBSOCKET_URL }}" > .env
+        echo "REACT_APP_WEBSOCKET_URL=$WEBSOCKET_URL" > .env
         
         # Build the React app
         npm run build
@@ -187,9 +183,9 @@ jobs:
         aws s3 sync $REACT_APP_DIR/build/ s3://$BUCKET_NAME --region ${{ env.AWS_REGION }} --delete
         
         # Invalidate CloudFront cache using the ID from Terraform output
-        if [[ -n "${{ env.CLOUDFRONT_ID }}" ]]; then
+        if [[ -n "$CLOUDFRONT_ID" ]]; then
           echo "Invalidating CloudFront cache..."
           aws cloudfront create-invalidation \
-            --distribution-id ${{ env.CLOUDFRONT_ID }} \
+            --distribution-id $CLOUDFRONT_ID \
             --paths "/*"
         fi
