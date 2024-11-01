@@ -176,7 +176,8 @@ jobs:
         echo "Building React application..."
         npm run build
       env:
-        CI: false
+        CI: true
+        NODE_ENV: production
 
     - name: Deploy to S3
       if: env.DEPLOY_ENV == 'DEV' || env.DEPLOY_ENV == 'PROD'
