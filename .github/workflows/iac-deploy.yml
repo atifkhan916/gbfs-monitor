@@ -152,26 +152,52 @@ jobs:
       if: env.DEPLOY_ENV == 'DEV' || env.DEPLOY_ENV == 'PROD'
       id: terraform_outputs
       run: |
-        cd "$TF_DIR"
+        # Get clean outputs using grep to extract the last line of each output
+        WEBSOCKET_URL=$(terraform output -raw websocket_url | tail -n1)
+        CLOUDFRONT_ID=$(terraform output -raw cloudfront_distribution_id | tail -n1)
+        WEBSITE_BUCKET=$(terraform output -raw website_s3_bucket_name | tail -n1)
         
-        # Get outputs and set them as environment variables
-        WEBSOCKET_URL=$(terraform output -raw websocket_url | sed 's/::debug::Terraform.*$//')
-        CLOUDFRONT_ID=$(terraform output -raw cloudfront_distribution_id | sed 's/::debug::Terraform.*$//')
-        WEBSITE_BUCKET=$(terraform output -raw website_s3_bucket_name | sed 's/::debug::Terraform.*$//')
+        # Validate outputs
+        echo "Validating outputs..."
         
-        # Save to GitHub Environment
-        echo "Terraform output received"
-        echo "Terraform output WEBSOCKET_URL: ${WEBSOCKET_URL}"
-        echo "Terraform output CLOUDFRONT_ID: ${CLOUDFRONT_ID}"
-        echo "Terraform output WEBSITE_BUCKET: ${WEBSITE_BUCKET}"
-        echo "WEBSOCKET_URL=${WEBSOCKET_URL}" >> $GITHUB_ENV
-        echo "CLOUDFRONT_ID=${CLOUDFRONT_ID}" >> $GITHUB_ENV
-        echo "WEBSITE_BUCKET=${WEBSITE_BUCKET}" >> $GITHUB_ENV
+        if [[ -z "$WEBSOCKET_URL" ]]; then
+          echo "Error: WebSocket URL is empty"
+          exit 1
+        fi
         
-        echo "Outputs retrieved:"
+        if [[ -z "$CLOUDFRONT_ID" ]]; then
+          echo "Error: CloudFront ID is empty"
+          exit 1
+        fi
+        
+        if [[ -z "$WEBSITE_BUCKET" ]]; then
+          echo "Error: Website bucket name is empty"
+          exit 1
+        fi
+        
+        # Add wss:// prefix if not present
+        if [[ ! "$WEBSOCKET_URL" =~ ^wss:// ]]; then
+          WEBSOCKET_URL="wss://${WEBSOCKET_URL}"
+        fi
+        
+        # Save to GITHUB_ENV using a different approach
+        {
+          echo "WEBSOCKET_URL=${WEBSOCKET_URL}"
+          echo "CLOUDFRONT_ID=${CLOUDFRONT_ID}"
+          echo "WEBSITE_BUCKET=${WEBSITE_BUCKET}"
+        } > "$GITHUB_ENV"
+        
+        # Print for verification
+        echo "Final outputs:"
         echo "WebSocket URL: ${WEBSOCKET_URL}"
         echo "CloudFront ID: ${CLOUDFRONT_ID}"
         echo "Website bucket Name: ${WEBSITE_BUCKET}"
+        
+        # Additional verification
+        if ! curl --output /dev/null --silent --head --fail "${WEBSOCKET_URL/wss/https}"; then
+          echo "Warning: WebSocket URL might not be accessible"
+        fi
+      shell: bash
 
     - name: Build React App
       run: |
