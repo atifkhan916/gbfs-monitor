@@ -581,5 +581,5 @@ output "cloudfront_distribution_id" {
 
 # Output the cloudfront_distribution_id for the frontend
 output "website_s3_bucket_name" {
-  value = "${aws_s3_bucket.website.bucket}"
+  value = "${aws_s3_bucket.website.id}"
 }
