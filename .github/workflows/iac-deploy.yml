@@ -177,8 +177,11 @@ jobs:
         
         
         echo "Building React application..."
+        
         # Run webpack directly without cross-env
-        npm run build
+        npm install webpack webpack-cli --save-dev
+    
+        NODE_ENV=production npx webpack --config webpack.config.js
       env:
         CI: true
         NODE_ENV: production
