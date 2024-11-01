@@ -28,7 +28,8 @@ A real-time monitoring system for bike-sharing services that collects, stores, a
    - IAM roles and policies
    - S3 bucket for static hosting
    - CloudFront distribution
-    ![Image Description](images/gbfs.architecture.png)
+
+![Image Description](images/gbfs.architecture.png)
 
 ## Environment Configuration
 
@@ -109,10 +110,9 @@ After deployment, you can get the UI URL in two ways:
 1. **Time Range Selection**
    - Use the dropdown in the top-right to select data window (1-24 hours)
    - Data updates automatically when range changes
-   ```markdown
-   ![Image Description](images/dashboard.png)
-   ```
 
+    ![Image Description](images/dashboard.png)
+   
 2. **Provider Data**
    - Each provider has a unique color in the chart
    - Hover over lines to see exact values
@@ -202,7 +202,7 @@ After deployment, you can get the UI URL in two ways:
    - Verify AWS credentials
    - Ensure Terraform state is not locked
 
-# System Improvement Recommendations
+# System Improvement Recommendations - Things I can improve
 
 ## 1. Performance Optimizations
 
@@ -220,27 +220,10 @@ After deployment, you can get the UI URL in two ways:
 - Implement circuit breakers for GBFS API calls to handle provider outages
 - Add fallback mechanisms for failed provider requests
 
-### Connection Management
-- Implement WebSocket connection heartbeat mechanism
-  
-  try {
-    const ws = new WebSocket(wsUrl);
-    // ... ws setup
-  } catch (error) {
-    if (retries < maxRetries) {
-      setTimeout(() => connectWebSocket(retries + 1), backoff);
-    }
-  }
-}
-```
-
-## 3. Scalability Enhancements - Things I can improve
-
-
+## 3. Scalability Enhancements 
 - Add VPC endpoints for enhanced security
-- Implement detailed alarm conditions
-
 - Implement JWT authentication for WebSocket connections
+
 ### Data Protection
 - Add server-side encryption for DynamoDB tables
 
@@ -252,7 +235,6 @@ After deployment, you can get the UI URL in two ways:
 ### DynamoDB Optimization
 - Use TTL more aggressively for old data
 - Implement more efficient querying patterns
-```
 
 ## 7. Developer Experience
 
