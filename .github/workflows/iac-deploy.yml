@@ -170,13 +170,15 @@ jobs:
         echo "REACT_APP_WEBSOCKET_URL=${{ env.WEBSOCKET_URL }}" > .env
         cat .env
         
-        npm ci --legacy-peer-deps
-        # Install webpack-cli globally to ensure it's available
-        npm install -g webpack webpack-cli
+        # Clean install dependencies
+        rm -rf node_modules
+        npm cache clean --force
+        npm install
+        
         
         echo "Building React application..."
         # Run webpack directly without cross-env
-        NODE_ENV=production webpack --config webpack.config.js
+        npm run build
       env:
         CI: true
         NODE_ENV: production
