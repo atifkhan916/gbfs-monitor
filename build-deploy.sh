@@ -21,9 +21,6 @@ if ! command_exists npm; then
     exit 1
 fi
 
-# Create output directory if it doesn't exist
-mkdir -p "$OUTPUT_DIR"
-
 # Install dependencies
 echo "Installing dependencies..."
 npm install
@@ -41,20 +38,20 @@ for lambda_folder in "$OUTPUT_DIR"/*; do
     fi
 done
 
-# Run Terraform commands
+# Run Terraform commands - THis will be done by github pipeline
 echo "Running Terraform commands..."
-cd "$TF_DIR" || exit
+#cd "$TF_DIR" || exit
 
 echo "Initializing Terraform..."
-terraform init
+#terraform init
 
 echo "Validating Terraform configuration..."
-terraform validate
+#terraform validate
 
 echo "Generating Terraform plan..."
-terraform plan -out=tfplan
+#terraform plan -out=tfplan
 
 echo "Creating resources..."
-terraform apply "tfplan"
+#terraform apply "tfplan"
 
 echo "Script completed!"

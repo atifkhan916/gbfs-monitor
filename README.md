@@ -36,3 +36,9 @@ Since Terraform doesn’t directly support associating IAM roles with QuickSight
 Go to AWS QuickSight console > Manage QuickSight.
 Under Security & permissions, assign the IAM role (quicksight-s3-access-role) manually to grant access to the S3 bucket.
 This setup enables QuickSight to use the IAM role’s permissions when accessing the specified S3 bucket. You only need to set up the IAM role association once in the QuickSight console.
+
+
+Add more error handling?
+Add retry logic for failed connections?
+Add data caching?
+Add automatic refresh intervals?
