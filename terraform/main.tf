@@ -569,7 +569,7 @@ resource "aws_iam_role_policy" "lambda_logging" {
 }
 
 output "websocket_url" {
-  value = "${aws_apigatewayv2_api.websocket.id}.execute-api.${var.aws_region}.amazonaws.com/${var.environment}"
+  value = "wss://${aws_apigatewayv2_api.websocket.id}.execute-api.${var.aws_region}.amazonaws.com/${var.environment}"
   description = "WebSocket URL for frontend connection"
 }
 
