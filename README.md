@@ -28,6 +28,7 @@ A real-time monitoring system for bike-sharing services that collects, stores, a
    - IAM roles and policies
    - S3 bucket for static hosting
    - CloudFront distribution
+    ![Image Description](images/gbfs.architecture.png)
 
 ## Environment Configuration
 
@@ -108,6 +109,9 @@ After deployment, you can get the UI URL in two ways:
 1. **Time Range Selection**
    - Use the dropdown in the top-right to select data window (1-24 hours)
    - Data updates automatically when range changes
+   ```markdown
+   ![Image Description](images/dashboard.png)
+   ```
 
 2. **Provider Data**
    - Each provider has a unique color in the chart
@@ -198,15 +202,123 @@ After deployment, you can get the UI URL in two ways:
    - Verify AWS credentials
    - Ensure Terraform state is not locked
 
-## Contributing
+# System Improvement Recommendations
 
-1. Fork the repository
-2. Create feature branch
-3. Make changes
-4. Run tests
-5. Create Pull Request to `dev`
-6. Await review and merge
+## 1. Performance Optimizations
 
-## License
+### Frontend Improvements
+- Implement client-side caching of bike data using browser's localStorage
+- Implement progressive loading for historical data
+- Implement batch processing for multiple GBFS provider requests
 
-[Your License Here]
+## 2. Reliability & Resilience
+
+### Error Handling
+- Add dead-letter queues for failed Lambda executions
+
+### Circuit Breaking
+- Implement circuit breakers for GBFS API calls to handle provider outages
+- Add fallback mechanisms for failed provider requests
+
+### Connection Management
+- Implement WebSocket connection heartbeat mechanism
+  
+  try {
+    const ws = new WebSocket(wsUrl);
+    // ... ws setup
+  } catch (error) {
+    if (retries < maxRetries) {
+      setTimeout(() => connectWebSocket(retries + 1), backoff);
+    }
+  }
+}
+```
+
+## 3. Scalability Enhancements - Things I can improve
+
+
+- Add VPC endpoints for enhanced security
+- Implement detailed alarm conditions
+
+- Implement JWT authentication for WebSocket connections
+### Data Protection
+- Add server-side encryption for DynamoDB tables
+
+## 6. Cost Optimization
+
+### Lambda Optimization
+- Adjust memory settings based on CloudWatch Insights
+
+### DynamoDB Optimization
+- Use TTL more aggressively for old data
+- Implement more efficient querying patterns
+```
+
+## 7. Developer Experience
+
+### CI/CD Improvements
+- Add automated testing for infrastructure changes
+- Implement automatic rollback mechanisms
+```yaml
+jobs:
+  test-infrastructure:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Run Terraform Tests
+        run: |
+          cd terraform
+          terraform init
+          terraform plan -var-file=test.tfvars
+```
+
+### Documentation
+- Add automatic API documentation generation
+- Implement infrastructure diagrams as code
+```hcl
+terraform {
+  required_version = ">= 1.5.7"
+  required_providers {
+    diagrams = {
+      source = "local/providers/diagrams"
+    }
+  }
+}
+```
+
+## 8. Feature Enhancements 
+
+
+### User Experience
+- Add push notifications for low bike availability
+- Implement geolocation-based station recommendations
+
+## Implementation Priority
+
+1. High Priority (1-2 months)
+   - Error handling improvements
+   - Monitoring & observability
+   - Security enhancements
+
+2. Medium Priority (3-4 months)
+   - Performance optimizations
+   - Scalability enhancements
+   - Cost optimization
+
+3. Long-term (5-6 months)
+   - Feature enhancements
+   - Analytics implementation
+   - Developer experience improvements
+
+## Next Steps
+
+1. Review and prioritize these improvements based on:
+   - Current pain points
+   - Resource availability
+   - Business impact
+   
+2. Create detailed implementation plans for each selected improvement
+
+3. Set up tracking metrics to measure the impact of improvements
+
+4. Schedule regular reviews to assess the effectiveness of implemented changes
