@@ -189,9 +189,9 @@ jobs:
         aws s3 sync $REACT_APP_DIR/build/ s3://$BUCKET_NAME --region ${{ env.AWS_REGION }} --delete
         
         # Invalidate CloudFront cache using the ID from Terraform output
-        if [[ -n "${{ env.CLOUDFRONT_ID }}" ]]; then
+        if [[ -n "$CLOUDFRONT_ID" ]]; then
           echo "Invalidating CloudFront cache..."
           aws cloudfront create-invalidation \
-            --distribution-id ${{ env.CLOUDFRONT_ID }} \
+            --distribution-id $CLOUDFRONT_ID \
             --paths "/*"
         fi
