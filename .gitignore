@@ -5,3 +5,7 @@
 node_modules
 build
 .DS_Store
+
+terraform.tfstate
+terraform/.terraform*
+terraform/tfplan*
