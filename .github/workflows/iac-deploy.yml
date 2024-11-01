@@ -184,7 +184,7 @@ jobs:
         echo "CURRENT_DIR=$(pwd)"
         echo "CURRENT_DIR_FILES=$(ls)"
         ENV_LOWER=$(echo "${{ env.DEPLOY_ENV }}" | tr '[:upper:]' '[:lower:]')
-        BUCKET_NAME="${ENV_LOWER}-gbfs-monitoring-frontend"
+        BUCKET_NAME="${{ env.WEBSITE_BUCKET }}"
         
         echo "Deploying React app to S3 bucket: $BUCKET_NAME"
         
